@@ -36,3 +36,13 @@ def test_slideshow_roundtrip(tmp_path):
     assert got == files and interval == pytest.approx(600) and trans == pytest.approx(2)
     single = gnome.write_slideshow(tmp_path / "one.xml", files[:1], 60, 0)
     assert gnome.read_slideshow(single)[0] == files[:1]
+
+
+def test_arrangement_matching_keeps_row_order_with_offsets():
+    # small vertical offsets must not outweigh the left-to-right order
+    from panescape.layout import compute_layout
+    cfg = configuration_from_dict(DESK)
+    centres = {p.monitor.name: (p.active.x + p.active.w / 2, p.active.y + p.active.h / 2)
+               for p in compute_layout(cfg)}
+    pairing = gnome.match_monitors(cfg.monitors, os_layout(), centres)
+    assert {k: v.connector for k, v in pairing.items()} == {"left": "DP-6", "centre": "DP-8", "right": "DP-7"}
