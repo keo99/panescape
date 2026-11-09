@@ -68,6 +68,15 @@ def _align(a0, a1, b0, b1, low: str, high: str) -> str:
     return "center"
 
 
+def usable_serial(m, mons) -> bool:
+    """Only pin by serial when it identifies the screen (compositors report
+    missing serials as '', 'Unknown' or 0x00000000)."""
+    serial = str(m.serial or "").strip()
+    if serial.lower() in ("", "unknown", "0", "0x00000000", "none"):
+        return False
+    return sum(1 for o in mons if str(o.serial or "").strip() == serial) == 1
+
+
 def config_skeleton(mons, name: str) -> dict:
     mons = list(mons)
     rows = _rows(mons)
@@ -83,7 +92,8 @@ def config_skeleton(mons, name: str) -> dict:
         else:
             e["resolution"] = f"{m.mode[0]}x{m.mode[1]}"
             e["size"] = "TODO"  # diagonal, e.g. 27in, or use active_area: [w, h] mm
-        e["serial"] = m.serial
+        if usable_serial(m, mons):
+            e["serial"] = m.serial
         e["rotation"] = ROTATION_NAMES[m.rotation]
         if placed and single_row:
             e["gap"] = 0

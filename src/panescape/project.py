@@ -513,8 +513,8 @@ class Project:
             _log(f"wallpaper set (slideshow of {len(state['order'])}, now {Path(state['order'][idx]).name})")
             started = self.ensure_slideshow_runner()
             if started:
-                _log(f"  started the slideshow runner (pid {started}). To keep it across logins, add to your "
-                     f"compositor config:\n    {runner_command(self.root)}")
+                _log(f"  started the slideshow runner (pid {started}). To keep it running after you log out "
+                     f"and back in, add to your compositor config:\n{runner_command(self.root)}")
         else:
             _log(f"wallpaper set (single image): {Path(state['order'][0]).name}")
         return target
@@ -613,7 +613,9 @@ def _raise_interrupt(*_args) -> None:
 
 
 def runner_command(root: Path) -> str:
-    return f"exec panescape --root {root} slideshow     # sway;  Hyprland: exec-once = ..."
+    import shlex
+    cmd = f"panescape --root {shlex.quote(str(root))} slideshow"
+    return f"    sway:     exec {cmd}\n    Hyprland: exec-once = {cmd}"
 
 
 def frame_index(state: dict, now: float | None = None) -> tuple[int, float]:

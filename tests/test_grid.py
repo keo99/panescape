@@ -97,3 +97,14 @@ def test_skeleton_for_grid_and_column():
     col = config_skeleton([_os("HDMI-1", 300, 1440, 1920, 1080), _os("DP-1", 0, 0)], "c")
     assert [e["name"] for e in col["monitors"]] == ["top", "bottom"]
     assert col["monitors"][1]["below"] == "top" and col["monitors"][1]["h_align"] == "center"
+
+
+def test_skeleton_skips_unusable_serials():
+    from panescape.backends.gnome import OsMonitor
+    from panescape.skeleton import config_skeleton
+
+    def mk(name, x, serial):
+        return OsMonitor(name, "V", "P", serial, name, x, 0, 1920, 1080, 1.0, 0, (1920, 1080), False, False)
+    sk = config_skeleton([mk("A", 0, "Unknown"), mk("B", 1920, "XY1"), mk("C", 3840, "XY1"),
+                          mk("D", 5760, "Z9")], "s")
+    assert [("serial" in e) for e in sk["monitors"]] == [False, False, False, True]

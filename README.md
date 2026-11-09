@@ -35,7 +35,8 @@ panescape apply
 
 **Status:** applies wallpapers and slideshows on **GNOME** (tested on GNOME 50 /
 Ubuntu 26.04, Wayland, with fractional scaling), and on **sway** and **Hyprland**
-(see [sway and Hyprland](#sway-and-hyprland)). On other desktops panescape makes
+(tested with sway 1.11, and Hyprland 0.53 with hyprpaper 0.8; see
+[sway and Hyprland](#sway-and-hyprland)). On other desktops panescape makes
 native-resolution images per monitor for you to set with your own tool (see
 [Other desktops](#other-desktops)). Python ≥ 3.10; the only dependencies are
 Pillow and PyYAML.

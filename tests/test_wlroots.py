@@ -77,8 +77,13 @@ def test_setters(recorder, monkeypatch, tmp_path):
 
     spawned = []
     monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
-    monkeypatch.setattr(wlroots.subprocess, "Popen",
-                        lambda cmd, **kw: spawned.append(cmd) or types.SimpleNamespace(pid=999999))
+    class FakeProc:
+        pid = 999999
+        stderr = types.SimpleNamespace(close=lambda: None)
+
+        def communicate(self, timeout=None):
+            raise wlroots.subprocess.TimeoutExpired("swaybg", timeout)  # still running = good
+    monkeypatch.setattr(wlroots.subprocess, "Popen", lambda cmd, **kw: spawned.append(cmd) or FakeProc())
     wlroots.set_outputs(out, setter="swaybg")
     assert spawned[0][:5] == ["swaybg", "-o", "DP-6", "-i", str(out["DP-6"])]
     assert (tmp_path / "panescape-swaybg.pid").read_text() == "999999"

@@ -125,15 +125,29 @@ def choose_setter(preferred: str | None = None) -> str:
     comp = compositor()
     if comp == "sway":
         return "sway"
-    if shutil.which("hyprctl") and _run(["hyprctl", "hyprpaper", "listactive"], check=False).returncode == 0 \
-            and "error" not in _run(["hyprctl", "hyprpaper", "listactive"], check=False).stdout.lower():
+    # hyprctl's request list differs between versions, so check for the daemons themselves
+    if comp == "hyprland" and _running("hyprpaper"):
         return "hyprpaper"
-    if shutil.which("swww") and _run(["swww", "query"], check=False).returncode == 0:
+    if (_running("swww-daemon") or _running("awww-daemon")) and shutil.which("swww"):
         return "swww"
     if shutil.which("swaybg"):
         return "swaybg"
     raise BackendError("no wallpaper tool found: install hyprpaper, swww or swaybg "
                        "(or start hyprpaper / swww-daemon)")
+
+
+def _running(name: str) -> bool:
+    """Is a process with this name running for this user? (/proc, no psutil needed)"""
+    uid = os.getuid()
+    for d in Path("/proc").iterdir():
+        if not d.name.isdigit():
+            continue
+        try:
+            if d.stat().st_uid == uid and (d / "comm").read_text().strip() == name[:15]:
+                return True
+        except OSError:
+            continue
+    return False
 
 
 def _pidfile() -> Path:
@@ -151,7 +165,13 @@ def _set_swaybg(outputs: dict[str, Path], color: str) -> None:
     cmd = ["swaybg"]
     for name, path in outputs.items():
         cmd += ["-o", name, "-i", str(path), "-m", "fill", "-c", color]
-    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, start_new_session=True)
+    proc = subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, start_new_session=True)
+    try:  # swaybg exits straight away if it can't draw (wrong WAYLAND_DISPLAY, no layer-shell)
+        _, err = proc.communicate(timeout=0.5)
+        raise BackendError(f"swaybg exited: {err.decode(errors='replace').strip() or proc.returncode} "
+                           f"(is WAYLAND_DISPLAY this session's? try 'setter:' hyprpaper or swww)")
+    except subprocess.TimeoutExpired:
+        proc.stderr.close()
     pf.write_text(str(proc.pid))
 
 
