@@ -31,6 +31,7 @@ from .base import (  # noqa: F401 - match_monitors is part of the backend interf
     OsLayout,
     OsMonitor,
     match_monitors,
+    native_size,
 )
 
 KIND = "per_output"  # one image per output
@@ -106,12 +107,6 @@ def get_layout() -> OsLayout:
     if comp == "hyprland":
         return parse_hyprland_monitors(json.loads(_run(["hyprctl", "monitors", "-j"]).stdout))
     raise BackendError("not running under sway or Hyprland")
-
-
-def native_size(om: OsMonitor) -> tuple[int, int]:
-    """Pixel size of the output as the wallpaper sees it (rotated)."""
-    w, h = om.mode
-    return (h, w) if om.rotation in (90, 270) else (w, h)
 
 
 # --------------------------------------------------------------------------- setters

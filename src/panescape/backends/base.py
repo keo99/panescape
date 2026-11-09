@@ -127,3 +127,9 @@ def _match_by_arrangement(pending, pool, centres) -> list:
         used.add(j)
         pairs.append((pending[i], pool[j]))
     return pairs
+
+
+def native_size(om: OsMonitor) -> tuple[int, int]:
+    """Pixel size of the output as the wallpaper sees it (rotated)."""
+    w, h = om.mode
+    return (h, w) if om.rotation in (90, 270) else (w, h)

@@ -9,7 +9,7 @@
     panescape tag IMAGES -a T -r T      add / remove tags (pictures/tags.yml)
     panescape tags [FILTER]             list images and their tags
     panescape calibrate [--watch]       millimetre test pattern for tuning the configuration
-    panescape slideshow                 sway/Hyprland: run the slideshow (autostart this)
+    panescape slideshow                 sway/Hyprland/KDE: run the slideshow (autostart this)
     panescape status                    show configurations, pictures and what is applied
 """
 
@@ -57,7 +57,7 @@ def _project(args) -> Project:
 def _backend(required=True):
     be = backends.detect()
     if be is None and required:
-        raise ProjectError("no supported desktop found (GNOME, sway and Hyprland are supported); "
+        raise ProjectError("no supported desktop found (GNOME, KDE Plasma, sway and Hyprland are supported); "
                            "the slices in backgrounds/ can still be set with your own tool")
     return be
 
@@ -365,6 +365,14 @@ def cmd_slideshow(args) -> None:
     if getattr(be, "KIND", "spanned") != "per_output":
         print("this desktop plays panescape slideshows itself; nothing to run")
         return
+    if args.autostart or args.no_autostart:
+        from .project import autostart_file, install_autostart
+        if args.no_autostart:
+            autostart_file().unlink(missing_ok=True)
+            print(f"removed {autostart_file()}")
+        else:
+            print(f"wrote {install_autostart(proj.root)} (starts the runner when you log in)")
+        return
     if args.stop:
         pid = proj.runner_pid()
         if pid:
@@ -491,10 +499,13 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--restore", action="store_true", help="put back the wallpaper from before calibrating")
     s.set_defaults(func=cmd_calibrate)
 
-    s = sub.add_parser("slideshow", help="sway/Hyprland: switch slideshow images on schedule "
+    s = sub.add_parser("slideshow", help="sway/Hyprland/KDE: switch slideshow images on schedule "
                        "(started automatically by apply; put it in your compositor's autostart)")
     s.add_argument("--once", action="store_true", help="show the image due now and exit")
     s.add_argument("--stop", action="store_true", help="stop a running slideshow runner")
+    s.add_argument("--autostart", action="store_true",
+                   help="start the runner at login via ~/.config/autostart (KDE and most desktops)")
+    s.add_argument("--no-autostart", action="store_true", help="remove that autostart entry")
     s.set_defaults(func=cmd_slideshow)
 
     s = sub.add_parser("status", help="show what is configured, made and applied")

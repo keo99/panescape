@@ -34,9 +34,9 @@ panescape apply
 ![Preview of the example desk](docs/images/preview.jpg)
 
 **Status:** applies wallpapers and slideshows on **GNOME** (tested on GNOME 50 /
-Ubuntu 26.04, Wayland, with fractional scaling), and on **sway** and **Hyprland**
-(tested with sway 1.11, and Hyprland 0.53 with hyprpaper 0.8; see
-[sway and Hyprland](#sway-and-hyprland)). On other desktops panescape makes
+Ubuntu 26.04, Wayland, with fractional scaling), **KDE Plasma 6** (see
+[KDE Plasma](#kde-plasma)), and **sway** and **Hyprland** (tested with sway
+1.11, and Hyprland 0.53 with hyprpaper 0.8; see [sway and Hyprland](#sway-and-hyprland)). On other desktops panescape makes
 native-resolution images per monitor for you to set with your own tool (see
 [Other desktops](#other-desktops)). Python ≥ 3.10; the only dependencies are
 Pillow and PyYAML.
@@ -362,12 +362,25 @@ It picks up `apply`, `add`, `sync` and `tag` changes by itself and pauses while
 `panescape status` shows whether it's running. Everything else (`calibrate`,
 `detect`, tags, rules) works the same as on GNOME.
 
+## KDE Plasma
+
+Plasma has a wallpaper per screen, so each monitor gets its native slice.
+panescape reads the layout with `kscreen-doctor -j` and sets the wallpapers
+through Plasma's scripting interface (`org.kde.PlasmaShell.evaluateScript` on
+D-Bus), for every activity. Plasma numbers screens instead of naming them, so
+outputs are matched to Plasma's screens by position.
+
+**Slideshows:** Plasma's own slideshow runs each screen separately, so it can't
+keep them in step. As on sway and Hyprland, `panescape slideshow` switches all
+screens together. `apply` starts it, and
+`panescape slideshow --autostart` adds a login entry in `~/.config/autostart`
+(`--no-autostart` removes it).
+
 ## Other desktops
 
 `backgrounds/<config>/<image>/N_name.png` are plain per-monitor images that you
-can set with any tool, for example `feh`, KDE's wallpaper settings or
-HydraPaper. A KDE Plasma backend would be a welcome contribution; see
-`src/panescape/backends/`.
+can set with any tool, for example `feh`, Cinnamon or HydraPaper. Backends
+for more desktops are welcome; see `src/panescape/backends/`.
 
 ## Adding a monitor model
 

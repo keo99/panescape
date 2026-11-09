@@ -612,10 +612,33 @@ def _raise_interrupt(*_args) -> None:
     raise KeyboardInterrupt
 
 
+def runner_argv(root: Path) -> list[str]:
+    import sys
+    return [sys.executable, "-m", "panescape", "--root", str(root), "slideshow"]
+
+
 def runner_command(root: Path) -> str:
     import shlex
-    cmd = f"panescape --root {shlex.quote(str(root))} slideshow"
-    return f"    sway:     exec {cmd}\n    Hyprland: exec-once = {cmd}"
+    cmd = shlex.join(runner_argv(root))
+    return (f"    sway:     exec {cmd}\n"
+            f"    Hyprland: exec-once = {cmd}\n"
+            f"    KDE and other desktops: panescape --root {shlex.quote(str(root))} slideshow --autostart")
+
+
+def autostart_file() -> Path:
+    base = Path(os.environ.get("XDG_CONFIG_HOME") or Path.home() / ".config")
+    return base / "autostart" / "panescape-slideshow.desktop"
+
+
+def install_autostart(root: Path) -> Path:
+    """XDG autostart entry (KDE, GNOME, Xfce, ...; not sway/Hyprland, which use exec lines)."""
+    import shlex
+    path = autostart_file()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text("[Desktop Entry]\nType=Application\nName=panescape slideshow\n"
+                    "Comment=Keeps panescape's multi-monitor slideshow in step\n"
+                    f"Exec={shlex.join(runner_argv(root))}\nX-GNOME-Autostart-enabled=true\nNoDisplay=true\n")
+    return path
 
 
 def frame_index(state: dict, now: float | None = None) -> tuple[int, float]:
