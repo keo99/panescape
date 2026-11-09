@@ -22,7 +22,8 @@ pipx install git+https://github.com/keo99/panescape
 mkdir ~/panescape && cd ~/panescape
 panescape init                     # pictures/, configurations/, backgrounds/, setup.yml
 panescape detect --write my_desk   # config skeleton from your current displays
-$EDITOR configurations/my_desk.yml # set gaps, vertical offsets, bezels (mm)
+$EDITOR configurations/my_desk.yml # set gaps, offsets, bezels (mm)
+panescape calibrate --watch        # test pattern; re-applies on every save
 cp ~/Pictures/some-wide-photo.jpg pictures/
 panescape make                     # check backgrounds/my_desk/*/preview.jpg
 panescape apply
@@ -76,6 +77,7 @@ panescape add new.jpg                   # pin an image into the current slidesho
 panescape sync                          # re-check tags / pictures / setup.yml and update
 panescape tag new.jpg -a landscape      # tag an image (updates a running slideshow)
 panescape tags 'landscape + !night'     # list images matching a filter
+panescape calibrate --watch             # millimetre test pattern while you tune the config
 panescape status                        # configs, what's been made, what's applied
 panescape-apply …                       # same as `panescape apply …`
 ```
@@ -87,8 +89,9 @@ when a screen would be enlarged.
 
 ## Configuration (`configurations/*.yml`)
 
-List monitors **left to right**. Lengths are in mm unless you give a unit
-(`28in`, `2.5cm`).
+Lengths are in mm unless you give a unit (`28in`, `2.5cm`). For a single row,
+list the monitors **left to right**. Stacks, grids and other arrangements are
+covered in [Layouts](#layouts-rows-stacks-and-grids).
 
 ```yaml
 name: desk_H
@@ -131,10 +134,14 @@ Every monitor key:
 | `active_area` | `[w, h]` of the lit area in mm, landscape. This is the most precise option |
 | `rotation` / `orientation` | GNOME Settings name, or `vertical` / `horizontal` |
 | `bezel` | Number, `[t, r, b, l]`, or `{left, right, top, bottom, x, y}`, measured **as mounted** |
-| `gap` | Horizontal distance from the previous monitor's housing |
-| `v_pos`, `v_align`, `v_ref` | Vertical offset, which edges it's measured between, and the reference monitor |
-| `position` | `[x, y]` of the housing's top-left in mm. Overrides the row layout, for stacked or free layouts |
-| `serial` / `connector` / `product` | Pin to a specific screen. Without these, screens are matched left to right |
+| `right_of` / `left_of` / `below` / `above` | Place this monitor next to another one, by name (see [Layouts](#layouts-rows-stacks-and-grids)) |
+| `gap` | Distance between this housing and the one it's placed next to (negative = overlap) |
+| `v_pos`, `v_align`, `v_ref` | Side-by-side monitors: vertical offset (+ is up), which edges it's measured between (`center`/`top`/`bottom`), and the reference monitor |
+| `h_pos`, `h_align`, `h_ref` | Stacked monitors: horizontal offset (+ is right), which edges it's measured between (`center`/`left`/`right`), and the reference monitor |
+| `position` | `[x, y]` of the housing's top-left in mm (y down), for arrangements the keys above can't describe |
+| `serial` / `connector` / `product` | Pin to a specific screen. Without these, screens are matched to the desktop by their arrangement |
+
+`defaults:` at the top level sets `gap`, `bezel`, `v_align` or `h_align` for every monitor.
 
 **Precision tips**
 
@@ -142,8 +149,84 @@ Every monitor key:
    panel is not exactly 28 inches.
 2. Measure your bezels with a ruler. Spec-sheet bezels are estimates, because
    manufacturers rarely split top and bottom.
-3. Measure `v_pos` between the edges that are easiest to measure, and set `v_align` to match.
+3. Measure `v_pos` / `h_pos` between the edges that are easiest to measure, and set `v_align` / `h_align` to match.
 4. Look at `preview.jpg`. It is drawn to scale.
+5. Finish with `panescape calibrate --watch` (see [Calibrating](#calibrating)).
+
+## Layouts: rows, stacks and grids
+
+The first monitor is the anchor. Every other monitor is placed relative to
+another one. The order in the file doesn't matter, as long as the references
+don't go round in a circle.
+
+| arrangement | how to write it |
+|---|---|
+| A row | List the monitors left to right with no placement key. Each sits right of the previous one, and `v_pos` is measured from the **first** monitor |
+| Beside a monitor | `right_of: NAME` or `left_of: NAME`, plus `gap`. `v_pos` is measured from NAME, unless `v_ref` says otherwise |
+| Above or below | `below: NAME` or `above: NAME`, plus `gap` (vertical) and `h_pos` / `h_align` (horizontal offset from NAME, or `h_ref`) |
+| Anything else | `position: [x, y]`, the housing's top-left in mm |
+
+A 2×2 grid ([full example](examples/configurations/grid-2x2.yml)):
+
+```yaml
+monitors:
+  - name: top-left
+    model: …
+  - name: top-right
+    right_of: top-left
+    gap: 1
+    v_align: top            # tops level
+  - name: bottom-left
+    below: top-left
+    gap: 2
+    h_align: left           # left edges level
+  - name: bottom-right
+    right_of: bottom-left
+    gap: 1
+    v_align: top
+```
+
+Other examples: [a laptop under a monitor](examples/configurations/laptop-under-monitor.yml),
+[portrait-landscape-portrait](examples/configurations/portrait-landscape-portrait.yml).
+
+`panescape detect --write NAME` writes this structure for you from the desktop's
+arrangement (rows, stacks and grids), with the measured numbers left at 0. When
+applying, config monitors are matched to the desktop's screens by **arrangement**,
+so a grid pairs up correctly. Use `serial:` to pin a monitor if two arrangements
+could be confused.
+
+## Calibrating
+
+```bash
+panescape calibrate --watch      # Ctrl+C puts your wallpaper back
+panescape calibrate              # apply once; undo with --restore (or panescape apply)
+```
+
+This puts a test pattern across your screens, drawn in physical millimetres
+from your configuration:
+
+- **Cyan horizontal and yellow vertical lines** every 50 mm.
+- **Orange and green 45° lines** every 100 mm.
+- **A magenta circle.**
+- **Rulers** along every screen edge, in desk millimetres. On screens dense
+  enough, they have 1 mm ticks.
+- **Each screen's settings**, plus the configured distance to its neighbours' lit
+  areas ("lit gap").
+
+With `--watch`, editing and saving the configuration re-applies the pattern in
+about a second. When the config matches reality, every line runs straight
+across the bezels. To fix it:
+
+1. **Spacing.** Measure the lit gaps with a ruler and adjust `gap` (or `bezel`)
+   until they match the numbers shown.
+2. **Side-by-side screens.** Read both edge rulers at the same physical height,
+   then: `v_pos += this screen's reading − the other screen's reading`.
+3. **Stacked screens.** Use the yellow lines and the top/bottom rulers, then:
+   `h_pos += the other screen's reading − this screen's reading`.
+4. **Check.** The diagonals and the circle should now be straight and continuous.
+
+Without a supported desktop, the pattern is written as per-monitor images in
+`backgrounds/<config>/calibration/`.
 
 ## `setup.yml`
 
