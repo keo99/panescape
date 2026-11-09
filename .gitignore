@@ -1,0 +1,15 @@
+__pycache__/
+*.egg-info/
+build/
+dist/
+.venv/
+.pytest_cache/
+.ruff_cache/
+
+# Your own data: images, generated output and personal setup stay local.
+/pictures/
+/backgrounds/
+/configurations/
+/setup.yml
+# README images are rebuilt from a downloaded CC0 photo
+/docs/.cache/
