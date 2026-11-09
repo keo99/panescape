@@ -94,3 +94,40 @@ def test_continuity_keeps_current_image():
     start = _continue_start(old, ["new", "a", "b", "c"], 60.0, now)
     elapsed = now - start
     assert int(elapsed // 60) == 2 and elapsed % 60 == pytest.approx(25)   # still "b", same moment
+
+
+def test_cache_follows_geometry_not_config_text(tmp_path):
+    import copy
+
+    import yaml
+    from helpers import DESK
+
+    proj = make_project(tmp_path, names=("a",))
+    cfg_path = tmp_path / "configurations" / "desk.yml"
+    job = proj.resolve_images(["a.png"])[0]
+    first = proj.render(proj.load_config(None), job)
+    assert not first.skipped
+    stamps = {n: p.stat().st_mtime_ns for n, p in first.slices.items()}
+
+    # a serial number can't change the picture: nothing is re-rendered
+    desk = copy.deepcopy(DESK)
+    desk["monitors"][1]["serial"] = "XYZ"
+    cfg_path.write_text(yaml.safe_dump(desk))
+    assert proj.render(proj.load_config(None), job).skipped
+
+    # moving the centre screen inside the desk outline re-renders only that screen
+    desk["monitors"][1]["v_pos"] = -25
+    cfg_path.write_text(yaml.safe_dump(desk))
+    r = proj.render(proj.load_config(None), job)
+    assert not r.skipped
+    changed = {n for n, p in r.slices.items() if p.stat().st_mtime_ns != stamps[n]}
+    assert changed == {"centre"}
+
+
+def test_render_many_keeps_order(tmp_path):
+    proj = make_project(tmp_path, names=("a", "b", "c"))
+    cfg = proj.load_config(None)
+    jobs = proj.resolve_images("all")
+    out = proj.render_many(cfg, jobs, then=lambda job, r: job.source.name)
+    assert [name for _, name in out] == ["a.png", "b.png", "c.png"]
+    assert all(r.mapping is None for r, _ in out)  # decoded sources released

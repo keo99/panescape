@@ -132,7 +132,8 @@ def cmd_make(args) -> None:
     override = _crop_override(args)
     for job in jobs:
         job.crop.update(override)
-        _print_render(proj, proj.render(cfg, job, force=args.force))
+    for r, _ in proj.render_many(cfg, jobs, force=args.force):
+        _print_render(proj, r)
     if args.apply:
         rule = _cli_rule(proj, args, mode="slideshow" if args.slideshow else "auto")
         proj.run(_backend(), rule, dry_run=args.dry_run)

@@ -121,6 +121,7 @@ crop:
   fit: cover                    # cover (fill and crop) | contain (whole image, bars)
 output:
   format: png                   # png | jpg | webp
+  # png_compression: 1          # 0-9: higher = smaller files, much slower (same pixels)
 ```
 
 Every monitor key:

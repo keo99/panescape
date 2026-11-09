@@ -115,14 +115,17 @@ class Mapping:
         return img, upscale
 
 
-def save_image(img: Image.Image, path: Path, fmt: str = "png", quality: int = 95) -> Path:
+def save_image(img: Image.Image, path: Path, fmt: str = "png", quality: int = 95,
+               png_compression: int = 1) -> Path:
+    """Save a slice. PNG is lossless at every level; 1 is ~5x faster than 6 for
+    photos, with files about a third larger."""
     path.parent.mkdir(parents=True, exist_ok=True)
     if fmt in ("jpg", "jpeg"):
         img.save(path, "JPEG", quality=quality, subsampling=0, optimize=True)
     elif fmt == "webp":
         img.save(path, "WEBP", quality=quality, method=6)
     else:
-        img.save(path, "PNG", compress_level=6)
+        img.save(path, "PNG", compress_level=png_compression)
     return path
 
 

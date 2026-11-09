@@ -5,12 +5,14 @@ from __future__ import annotations
 import fnmatch
 import hashlib
 import json
+import os
 import random
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
 import yaml
+from PIL import Image
 
 from . import __version__
 from .config import Configuration, load_configuration
@@ -20,6 +22,7 @@ from .units import parse_duration
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".gif", ".avif", ".heic"}
 STATE_FILE = ".panescape-state.json"
+MAX_WORKERS = 4  # images rendered in parallel (each holds a decoded source + desktop image)
 RESTORE_FILE = ".calibrate-restore.json"  # wallpaper saved by `panescape calibrate`
 
 
@@ -45,6 +48,9 @@ class Rendered:
     key: str               # cache key of this render
     warnings: list
     skipped: bool
+    crop: CropSpec | None = None
+    layout: Layout | None = None
+    mapping: Mapping | None = None   # decoded source, kept only while rendering
 
 
 def _log(msg: str) -> None:
@@ -170,50 +176,77 @@ class Project:
         setup_crop = self.load_setup().get("crop")
         return CropSpec.from_dicts(cfg.crop, setup_crop, job.crop, override)
 
-    def _cache_key(self, cfg: Configuration, job: ImageJob, crop: CropSpec) -> str:
-        st = job.source.stat()
-        data = [__version__, str(job.source), st.st_size, int(st.st_mtime), cfg.fingerprint(), crop.as_dict()]
-        return hashlib.sha1(json.dumps(data, default=str).encode()).hexdigest()[:10]
+    @staticmethod
+    def _hash(data) -> str:
+        return hashlib.sha1(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()[:10]
 
-    def mapping(self, cfg: Configuration, job: ImageJob, crop: CropSpec) -> tuple[Layout, Mapping]:
-        layout = compute_layout(cfg)
-        img = load_image(job.source)
-        return layout, Mapping(img, layout.canvas, crop)
+    def _slice_keys(self, job: ImageJob, crop: CropSpec, layout: Layout, fmt: str, quality: int) -> dict:
+        """Per-monitor cache keys: only what changes that monitor's pixels.
+
+        The source file, crop settings, the size of the cropped desk area (it
+        decides the scale) and this monitor's lit rectangle and resolution. So
+        edits that can't change the picture (serials, names of other monitors,
+        comments, v_ref vs an equivalent layout) re-render nothing, and moving
+        one monitor inside the desk's outline re-renders only that monitor.
+        """
+        st = job.source.stat()
+        base = [__version__, str(job.source), st.st_size, st.st_mtime_ns, crop.as_dict(),
+                round(layout.canvas.w, 3), round(layout.canvas.h, 3), fmt, quality]
+        return {p.monitor.name: self._hash(base + [p.active.as_tuple(), p.monitor.pixels]) for p in layout}
 
     def render(self, cfg: Configuration, job: ImageJob, force: bool = False,
                crop_override: dict | None = None, preview: bool = True) -> Rendered:
         crop = self.crop_for(cfg, job, crop_override)
-        key = self._cache_key(cfg, job, crop)
+        layout = compute_layout(cfg)
         out = self.out_dir(cfg, job)
         meta_path = out / "meta.json"
         fmt = str(cfg.output.get("format", "png")).lower().lstrip(".")
         ext = "jpg" if fmt == "jpeg" else fmt
         quality = int(cfg.output.get("quality", 95))
         names = {m.name: out / f"{m.index + 1}_{m.name}.{ext}" for m in cfg.monitors}
+        keys = self._slice_keys(job, crop, layout, fmt, quality)
+        key = self._hash(sorted(keys.items()))
 
-        if not force and meta_path.exists():
+        old_meta: dict = {}
+        if meta_path.exists():
             try:
-                meta = json.loads(meta_path.read_text())
-                if meta.get("key") == key and all(p.exists() for p in names.values()):
-                    return Rendered(job, out, names, key, meta.get("warnings", []), skipped=True)
+                old_meta = json.loads(meta_path.read_text())
             except (OSError, json.JSONDecodeError):
-                pass
+                old_meta = {}
+        old_monitors = {m.get("name"): m for m in old_meta.get("monitors", [])}
 
-        layout, mapping = self.mapping(cfg, job, crop)
-        warnings = []
+        def reusable(name: str) -> bool:
+            om = old_monitors.get(name)
+            return (not force and om is not None and om.get("slice_key") == keys[name]
+                    and names[name].exists())
+
+        rendered = Rendered(job, out, names, key, [], skipped=True)
+        if all(reusable(n) for n in names) and (not preview or (out / "preview.jpg").exists()):
+            rendered.warnings = old_meta.get("warnings", [])
+            rendered.crop, rendered.layout = crop, layout
+            return rendered
+
         out.mkdir(parents=True, exist_ok=True)
+        mapping = Mapping(load_image(job.source), layout.canvas, crop)
+        rendered.crop, rendered.layout, rendered.mapping = crop, layout, mapping
+        keep = {"meta.json", "preview.jpg"} | {p.name for p in names.values()}
         for old in out.glob("*"):
-            if old.is_file() and old.name != "meta.json":
-                old.unlink()
-        monitors_meta = []
+            if old.is_file() and old.name not in keep:
+                old.unlink()  # slices of removed monitors, stale composites
+        warnings, monitors_meta = [], []
         for p in layout:
             m = p.monitor
-            tile, up = mapping.render(p.active, m.pixels)
-            save_image(tile, names[m.name], fmt, quality)
+            if reusable(m.name):
+                up = old_monitors[m.name].get("upscale", 1.0)
+            else:
+                rendered.skipped = False
+                tile, up = mapping.render(p.active, m.pixels)
+                save_image(tile, names[m.name], fmt, quality,
+                           int(cfg.output.get("png_compression", 1)))
             if up > UPSCALE_WARN:
                 warnings.append(f"{m.name}: source is enlarged {up:.2f}x (image has fewer pixels than the screen)")
             monitors_meta.append({
-                "name": m.name, "pixels": m.pixels, "rotation": m.rotation,
+                "name": m.name, "slice_key": keys[m.name], "pixels": m.pixels, "rotation": m.rotation,
                 "active_mm": p.active.as_tuple(), "housing_mm": p.outer.as_tuple(),
                 "bezel_mm": m.bezel, "source_box_px": [round(v, 2) for v in mapping.box(p.active)],
                 "upscale": round(up, 3), "notes": m.notes,
@@ -229,30 +262,64 @@ class Project:
             "created": time.strftime("%Y-%m-%d %H:%M:%S"),
         }
         meta_path.write_text(json.dumps(meta, indent=2))
-        return Rendered(job, out, names, key, warnings, skipped=False)
+        rendered.warnings = warnings
+        return rendered
+
+    def render_many(self, cfg: Configuration, jobs: list[ImageJob], force: bool = False,
+                    then=None) -> list:
+        """Render jobs in parallel (Pillow releases the GIL while resizing/encoding).
+
+        ``then(job, rendered)`` runs in the same worker (e.g. building the
+        desktop's combined image while the decoded source is still in memory).
+        Returns [(rendered, then-result)] in the order of ``jobs``.
+        """
+        from concurrent.futures import ThreadPoolExecutor
+
+        def work(job):
+            r = self.render(cfg, job, force=force)
+            res = then(job, r) if then else None
+            r.mapping = None  # free the decoded source
+            return r, res
+
+        workers = max(1, min(len(jobs), MAX_WORKERS, os.cpu_count() or 1))
+        if workers == 1:
+            return [work(j) for j in jobs]
+        with ThreadPoolExecutor(max_workers=workers) as ex:
+            return list(ex.map(work, jobs))
 
     # ------------------------------------------------------------------ apply
     def composite(self, backend, cfg: Configuration, job: ImageJob, os_layout, pairing,
                   rendered: Rendered) -> Path:
-        """Desktop-specific combined image (cached per layout + render key)."""
-        path = rendered.out_dir / f"{backend.__name__.rsplit('.', 1)[-1]}-{os_layout.fingerprint()}-{rendered.key}.png"
+        """Desktop-specific combined image (cached per desktop layout + render key)."""
+        prefix = backend.__name__.rsplit(".", 1)[-1]
+        path = rendered.out_dir / f"{prefix}-{os_layout.fingerprint()}-{rendered.key}.png"
         if path.exists():
             return path
-        for old in rendered.out_dir.glob(f"{backend.__name__.rsplit('.', 1)[-1]}-*.png"):
+        for old in rendered.out_dir.glob(f"{prefix}-*.png"):
             old.unlink()
-        crop = self.crop_for(cfg, job)
-        layout, mapping = self.mapping(cfg, job, crop)
+        mapping = rendered.mapping
+        crop = rendered.crop or self.crop_for(cfg, job)
+        layout = rendered.layout or compute_layout(cfg)
         by_os = {pairing[p.monitor.name].connector: p for p in layout if p.monitor.name in pairing}
 
         def render_for(om, size):
+            nonlocal mapping
             placed = by_os.get(om.connector)
             if placed is None:
                 return None
+            slice_path = rendered.slices.get(placed.monitor.name)
+            if tuple(size) == tuple(placed.monitor.pixels) and slice_path and slice_path.exists():
+                with Image.open(slice_path) as im:  # already rendered at exactly this size
+                    return im.convert("RGB")
+            if mapping is None:
+                mapping = Mapping(load_image(job.source), layout.canvas, crop)
             tile, _ = mapping.render(placed.active, size)
             return tile
 
         img = backend.compose(os_layout, render_for, crop.background)
-        img.save(path, "PNG", compress_level=3)
+        tmp = path.with_suffix(".tmp")
+        img.save(tmp, "PNG", compress_level=1)
+        tmp.replace(path)
         return path
 
     # ------------------------------------------------------------------ state
@@ -352,14 +419,16 @@ class Project:
             if om not in pairing.values():
                 _log(f"  (GNOME monitor {om.connector} is not in the configuration; it will be black)")
 
+        def build(job, r):
+            return str(self.composite(backend, cfg, job, os_layout, pairing, r))
+
         comp: dict[str, str] = {}
-        for job in jobs:
-            r = self.render(cfg, job, force=force)
+        for job, (r, path) in zip(jobs, self.render_many(cfg, jobs, force=force, then=build), strict=True):
             rel = r.out_dir.relative_to(self.root) if r.out_dir.is_relative_to(self.root) else r.out_dir
             _log(f"{'cached ' if r.skipped else 'rendered'} {job.source.name} -> {rel}")
             for w in r.warnings:
                 _log(f"  warning: {w}")
-            comp[str(job.source)] = str(self.composite(backend, cfg, job, os_layout, pairing, r))
+            comp[str(job.source)] = path
 
         order = [str(j.source) for j in jobs]
         if slideshow and shuffle:
