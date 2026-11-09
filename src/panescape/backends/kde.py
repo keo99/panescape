@@ -80,7 +80,22 @@ def get_layout() -> OsLayout:
     tool = shutil.which("kscreen-doctor")
     if not tool:
         raise BackendError("kscreen-doctor not found (install libkscreen / libkscreen-bin)")
-    return parse_kscreen(json.loads(_run([tool, "-j"])))
+    layout = parse_kscreen(json.loads(_run([tool, "-j"])))
+    try:  # Plasma's own geometry is the authority on logical sizes
+        refine_with_plasma(layout, plasma_screens())
+    except BackendError:
+        pass
+    return layout
+
+
+def refine_with_plasma(layout: OsLayout, screens: list[dict]) -> None:
+    """Use Plasma's logical screen sizes (kscreen's mode / scale can disagree,
+    e.g. in nested sessions)."""
+    for om in layout.monitors:
+        idx = screen_for(om, screens)
+        s = next((s for s in screens if s["screen"] == idx), None)
+        if s is not None:
+            om.width, om.height = int(s["width"]), int(s["height"])
 
 
 # --------------------------------------------------------------------------- plasma scripting
@@ -119,12 +134,12 @@ def plasma_screens() -> list[dict]:
 
 
 def screen_for(om: OsMonitor, screens: list[dict]) -> int | None:
-    """Plasma screen number showing this output (matched by position, then size)."""
+    """Plasma screen number showing this output, matched by position (outputs
+    can't share a top-left corner; sizes can disagree between kscreen and Plasma)."""
     def dist(s):
-        return abs(s["x"] - om.x) + abs(s["y"] - om.y) + 0.1 * (abs(s["width"] - om.width) +
-                                                               abs(s["height"] - om.height))
-    best = min(screens, key=dist, default=None)
-    return None if best is None or dist(best) > 16 else best["screen"]
+        return abs(s["x"] - om.x) + abs(s["y"] - om.y)
+    best = min(screens, key=lambda s: (dist(s), abs(s["width"] - om.width)), default=None)
+    return None if best is None or dist(best) > 8 else best["screen"]
 
 
 def _cache_dir() -> Path:

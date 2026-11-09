@@ -85,3 +85,14 @@ def test_autostart_entry(monkeypatch, tmp_path):
     assert path == autostart_file() and path.parent.name == "autostart"
     text = path.read_text()
     assert "Exec=" in text and "slideshow" in text and "'" in text   # path with a space is quoted
+
+
+def test_plasma_sizes_override_kscreen():
+    # nested KWin: kscreen says 1440x810 at scale 1, Plasma's logical screens are 960x540
+    lay = kde.parse_kscreen({"outputs": [
+        {"name": f"WL-{i}", "enabled": True, "pos": {"x": 960 * i, "y": 0}, "scale": 1, "rotation": 1,
+         "currentModeId": "1", "modes": [{"id": "1", "size": {"width": 1440, "height": 810}}]} for i in range(3)]})
+    screens = [{"screen": i, "x": 960 * i, "y": 0, "width": 960, "height": 540} for i in range(3)]
+    assert [kde.screen_for(m, screens) for m in lay.monitors] == [0, 1, 2]
+    kde.refine_with_plasma(lay, screens)
+    assert [(m.width, m.height) for m in lay.monitors] == [(960, 540)] * 3

@@ -513,8 +513,8 @@ class Project:
             _log(f"wallpaper set (slideshow of {len(state['order'])}, now {Path(state['order'][idx]).name})")
             started = self.ensure_slideshow_runner()
             if started:
-                _log(f"  started the slideshow runner (pid {started}). To keep it running after you log out "
-                     f"and back in, add to your compositor config:\n{runner_command(self.root)}")
+                _log(f"  started the slideshow runner (pid {started}). To start it automatically "
+                     f"when you log in:\n{runner_command(self.root)}")
         else:
             _log(f"wallpaper set (single image): {Path(state['order'][0]).name}")
         return target
