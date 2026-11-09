@@ -415,19 +415,25 @@ class Project:
         pairing = backend.match_monitors(cfg.monitors, os_layout, centres)
         for name, om in pairing.items():
             _log(f"  {name:<10} -> {om.connector} ({om.display_name}, serial {om.serial})")
+        per_output = getattr(backend, "KIND", "spanned") == "per_output"
         for om in os_layout.monitors:
             if om not in pairing.values():
-                _log(f"  (GNOME monitor {om.connector} is not in the configuration; it will be black)")
+                _log(f"  (monitor {om.connector} is not in the configuration; "
+                     f"{'left as it is' if per_output else 'it will be black'})")
 
         def build(job, r):
             return str(self.composite(backend, cfg, job, os_layout, pairing, r))
 
-        comp: dict[str, str] = {}
-        for job, (r, path) in zip(jobs, self.render_many(cfg, jobs, force=force, then=build), strict=True):
+        # comp[source]: GNOME: path of the combined image; per-output: {output: slice path}
+        comp: dict = {}
+        renders = self.render_many(cfg, jobs, force=force, then=None if per_output else build)
+        for job, (r, path) in zip(jobs, renders, strict=True):
             rel = r.out_dir.relative_to(self.root) if r.out_dir.is_relative_to(self.root) else r.out_dir
             _log(f"{'cached ' if r.skipped else 'rendered'} {job.source.name} -> {rel}")
             for w in r.warnings:
                 _log(f"  warning: {w}")
+            if per_output:
+                path = {pairing[n].connector: str(p) for n, p in r.slices.items() if n in pairing}
             comp[str(job.source)] = path
 
         order = [str(j.source) for j in jobs]
@@ -460,6 +466,15 @@ class Project:
         start = time.time()
         if slideshow and continuity and old.get("mode") == "slideshow":
             start = _continue_start(old, order, secs, start)
+        state = {
+            "mode": mode, "configuration": str(cfg.path), "kind": "per_output" if per_output else "spanned",
+            "rule": rule, "pinned": pinned,
+            "order": order, "composites": [comp[o] for o in order],
+            "interval": interval, "transition": transition, "interval_s": secs, "transition_s": trans,
+            "shuffle": shuffle, "start": start,
+        }
+        if per_output:
+            return self._apply_per_output(backend, state, dry_run)
         if slideshow:
             sdir = self.backgrounds / cfg.name / "slideshows"
             # unique name every time: GNOME only reloads when the URI changes
@@ -478,16 +493,139 @@ class Project:
             for f in (self.backgrounds / cfg.name / "slideshows").glob("slideshow-*.xml"):
                 if f != target:
                     f.unlink()
-        self.save_state({
-            "mode": mode, "configuration": str(cfg.path),
-            "rule": rule, "pinned": pinned,
-            "order": order, "composites": [comp[o] for o in order],
-            "interval": interval, "transition": transition, "interval_s": secs, "transition_s": trans,
-            "shuffle": shuffle, "start": start,
-            "target": str(target), "applied": time.strftime("%Y-%m-%d %H:%M:%S"),
-        })
+        self.save_state({**state, "target": str(target), "applied": time.strftime("%Y-%m-%d %H:%M:%S")})
         _log(f"wallpaper set ({f'slideshow of {len(order)}' if slideshow else 'single image'}): {target}")
         return target
+
+    def _apply_per_output(self, backend, state: dict, dry_run: bool) -> Path | None:
+        """sway / Hyprland: show the current frame now; a slideshow runner does the rest."""
+        idx, _ = frame_index(state)
+        frame = state["composites"][idx]
+        target = Path(next(iter(frame.values())))
+        if dry_run:
+            _log(f"dry run: would show {Path(state['order'][idx]).name} on {', '.join(frame)}")
+            return target
+        backend.set_outputs(frame, transition=state["transition_s"], setter=self.load_setup().get("setter"))
+        (self.backgrounds / RESTORE_FILE).unlink(missing_ok=True)  # calibration superseded
+        self.save_state({**state, "target": str(target), "shown": idx,
+                         "applied": time.strftime("%Y-%m-%d %H:%M:%S")})
+        if state["mode"] == "slideshow":
+            _log(f"wallpaper set (slideshow of {len(state['order'])}, now {Path(state['order'][idx]).name})")
+            started = self.ensure_slideshow_runner()
+            if started:
+                _log(f"  started the slideshow runner (pid {started}). To keep it across logins, add to your "
+                     f"compositor config:\n    {runner_command(self.root)}")
+        else:
+            _log(f"wallpaper set (single image): {Path(state['order'][0]).name}")
+        return target
+
+    # ------------------------------------------------------------------ slideshow runner
+    @property
+    def runner_pidfile(self) -> Path:
+        return self.backgrounds / ".slideshow.pid"
+
+    def runner_pid(self) -> int | None:
+        try:
+            pid = int(self.runner_pidfile.read_text())
+            os.kill(pid, 0)
+            return pid
+        except (OSError, ValueError):
+            return None
+
+    def ensure_slideshow_runner(self) -> int | None:
+        """Start ``panescape slideshow`` in the background unless one is running."""
+        if self.runner_pid():
+            return None
+        import subprocess
+        import sys
+        self.backgrounds.mkdir(parents=True, exist_ok=True)
+        log = open(self.backgrounds / "slideshow.log", "a")  # noqa: SIM115 - handed to the child
+        proc = subprocess.Popen([sys.executable, "-m", "panescape", "--root", str(self.root), "slideshow"],
+                                stdout=log, stderr=log, stdin=subprocess.DEVNULL, start_new_session=True)
+        return proc.pid
+
+    def run_slideshow(self, backend, poll: float = 5.0, once: bool = False) -> None:
+        """Keep per-output wallpapers in step with the saved slideshow.
+
+        Re-reads the state on every wake, so apply / add / sync / tag take
+        effect; pauses while a calibration pattern is up; exits when the
+        current wallpaper is no longer a slideshow.
+        """
+        import signal
+        if not once:
+            self.backgrounds.mkdir(parents=True, exist_ok=True)
+            self.runner_pidfile.write_text(str(os.getpid()))
+            signal.signal(signal.SIGTERM, _raise_interrupt)
+        last = None
+        try:
+            while True:
+                state = self.load_state()
+                if state.get("kind") != "per_output" or state.get("mode") != "slideshow":
+                    _log("no per-output slideshow is applied; slideshow runner exiting")
+                    return
+                idx, wait = frame_index(state)
+                key = (state.get("applied"), idx)
+                if key != last and not (self.backgrounds / RESTORE_FILE).exists():
+                    frame = state["composites"][idx]
+                    # a fresh apply already showed this frame; otherwise it's our turn
+                    fresh_apply = last is None or last[0] != state.get("applied")
+                    if not (fresh_apply and state.get("shown") == idx):
+                        try:
+                            backend.set_outputs(frame, transition=state.get("transition_s", 0),
+                                                setter=self.load_setup().get("setter"))
+                            _log(f"{time.strftime('%H:%M:%S')} showing {Path(state['order'][idx]).name}")
+                        except Exception as e:  # noqa: BLE001 - keep running, try again next tick
+                            _log(f"{time.strftime('%H:%M:%S')} could not set wallpaper: {e}")
+                    last = key
+                if once:
+                    return
+                time.sleep(max(0.2, min(wait, poll)))
+        except KeyboardInterrupt:
+            pass
+        finally:
+            if not once:
+                try:
+                    if int(self.runner_pidfile.read_text()) == os.getpid():
+                        self.runner_pidfile.unlink()
+                except (OSError, ValueError):
+                    pass
+
+    def show_current(self, backend) -> bool:
+        """Put the applied panescape wallpaper back (e.g. after calibrating)."""
+        state = self.load_state()
+        if not state:
+            return False
+        if state.get("kind") == "per_output":
+            if getattr(backend, "KIND", "") != "per_output":
+                return False
+            idx, _ = frame_index(state)
+            backend.set_outputs(state["composites"][idx], transition=0,
+                                setter=self.load_setup().get("setter"))
+            return True
+        if state.get("target") and Path(state["target"]).exists() and hasattr(backend, "set_wallpaper"):
+            backend.set_wallpaper(Path(state["target"]))
+            return True
+        return False
+
+
+def _raise_interrupt(*_args) -> None:
+    raise KeyboardInterrupt
+
+
+def runner_command(root: Path) -> str:
+    return f"exec panescape --root {root} slideshow     # sway;  Hyprland: exec-once = ..."
+
+
+def frame_index(state: dict, now: float | None = None) -> tuple[int, float]:
+    """(image index on screen now, seconds until the next change) for a slideshow state."""
+    n = len(state.get("order") or [])
+    if state.get("mode") != "slideshow" or n <= 1:
+        return 0, 3600.0
+    secs = float(state.get("interval_s") or 600)
+    now = time.time() if now is None else now
+    elapsed = (now - float(state.get("start", now))) % (n * secs)
+    idx = int(elapsed // secs)
+    return min(idx, n - 1), secs - (elapsed - idx * secs)
 
 
 def _continue_start(old: dict, order: list[str], secs: float, now: float) -> float:

@@ -33,8 +33,9 @@ panescape apply
 
 ![Preview of the example desk](docs/images/preview.jpg)
 
-**Status:** applying wallpapers works on **GNOME** (tested on GNOME 50 / Ubuntu
-26.04, Wayland, with fractional scaling). On other desktops panescape makes
+**Status:** applies wallpapers and slideshows on **GNOME** (tested on GNOME 50 /
+Ubuntu 26.04, Wayland, with fractional scaling), and on **sway** and **Hyprland**
+(see [sway and Hyprland](#sway-and-hyprland)). On other desktops panescape makes
 native-resolution images per monitor for you to set with your own tool (see
 [Other desktops](#other-desktops)). Python ≥ 3.10; the only dependencies are
 Pillow and PyYAML.
@@ -326,12 +327,46 @@ The physical layout (config) and GNOME's arrangement (Settings > Displays) are
 separate. Moving the mouse between screens uses GNOME's arrangement, and the
 picture uses your measured layout.
 
+## sway and Hyprland
+
+On these compositors every output gets its own native-resolution slice, so no
+combined image is needed. panescape reads the layout from `swaymsg -t get_outputs`
+or `hyprctl monitors -j`. It sets the wallpaper with the first of these tools
+that works:
+
+| setter | how |
+|---|---|
+| `sway` | sway's own `output NAME bg FILE fill` (sway runs swaybg itself) |
+| `hyprpaper` | `hyprctl hyprpaper wallpaper` (start hyprpaper in your Hyprland autostart) |
+| `swww` | `swww img --outputs NAME`, with a fade for slideshow transitions (needs `swww-daemon` running) |
+| `swaybg` | a `swaybg` process that panescape starts and replaces |
+
+To force one, set `setter: swww` in `setup.yml` or `PANESCAPE_SETTER=swww` in
+the environment.
+
+**Slideshows:** these desktops have no synced multi-monitor slideshow, so
+`panescape slideshow` changes every output together on schedule. `apply`
+starts it in the background when you apply a slideshow. Add it to your
+compositor's autostart so it survives logging out:
+
+```
+# sway (~/.config/sway/config)
+exec panescape --root ~/panescape slideshow
+# Hyprland
+exec-once = panescape --root ~/panescape slideshow
+```
+
+It picks up `apply`, `add`, `sync` and `tag` changes by itself and pauses while
+`calibrate` is running. `panescape slideshow --stop` stops it, and
+`panescape status` shows whether it's running. Everything else (`calibrate`,
+`detect`, tags, rules) works the same as on GNOME.
+
 ## Other desktops
 
 `backgrounds/<config>/<image>/N_name.png` are plain per-monitor images that you
-can set with any tool, for example `swaybg -o DP-1 -i 1_left.png …`, `feh`, KDE or
-HydraPaper. Backends for KDE, sway and Hyprland would be welcome contributions,
-see `src/panescape/backends/`.
+can set with any tool, for example `feh`, KDE's wallpaper settings or
+HydraPaper. A KDE Plasma backend would be a welcome contribution; see
+`src/panescape/backends/`.
 
 ## Adding a monitor model
 

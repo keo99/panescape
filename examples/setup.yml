@@ -11,3 +11,4 @@ filter: landscape + !night      # tag filter (pictures/tags.yml); "" for none
 interval: 15m                   # slideshow: time per image (s, m, h)
 transition: 2s                  # slideshow: cross-fade length
 shuffle: false
+# setter: swww                  # sway/Hyprland only: sway | hyprpaper | swww | swaybg (default: first that works)
