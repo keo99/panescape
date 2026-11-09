@@ -1,0 +1,25 @@
+# Two portrait 28" 4K panels either side of a landscape 24" 1080p panel,
+# the centre one sitting 20 mm lower. This is the setup in the README images.
+# Monitors are listed LEFT TO RIGHT. Lengths are mm unless a unit is given (28in, 2cm).
+name: portrait-landscape-portrait
+monitors:
+  - name: left
+    model: Samsung U28E590      # built-in specs: 3840x2160, active area 620.93 x 341.28 mm
+    rotation: portrait-right    # as named in GNOME Settings > Displays
+    # serial: ABC123            # pin to a physical screen (see `panescape detect`)
+    # bezel: {left: 24, right: 16, top: 20, bottom: 20}   # measured as mounted
+
+  - name: centre
+    model: Dell P2425H          # built-in specs: 1920x1080, active area 527.04 x 296.46 mm
+    rotation: landscape
+    gap: 0                      # mm between this housing and the previous one (-ve = overlap)
+    v_pos: -20                  # centre is 20 mm BELOW the left monitor's centre (+ve = up)
+
+  - name: right
+    model: Samsung U28E590
+    rotation: portrait-left
+    gap: 0
+    v_pos: 0
+
+crop:
+  anchor: center

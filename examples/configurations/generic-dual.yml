@@ -1,0 +1,16 @@
+# Two monitors that are not in the built-in model list: give resolution and
+# either the diagonal (size) or, more precisely, the lit area (active_area).
+name: generic-dual
+monitors:
+  - name: left
+    resolution: QHD             # 2560x1440
+    size: 27in
+    bezel: 8
+
+  - name: right
+    resolution: 4K
+    active_area: [596.7, 335.7] # from the spec sheet, landscape, mm
+    bezel: {left: 6, right: 6, top: 6, bottom: 18}
+    gap: 3
+    v_align: bottom             # measure between the bottom edges...
+    v_pos: 0                    # ...which are level

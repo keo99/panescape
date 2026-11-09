@@ -1,0 +1,13 @@
+# What `panescape apply` (no arguments) puts on the desktop.
+configuration: portrait-landscape-portrait   # a file in ./configurations (without .yml)
+mode: slideshow                 # single | slideshow
+images: all                     # 'all' = everything in ./pictures, or a list:
+#  - mountains.jpg
+#  - "city-*.png"               # globs work
+#  - file: tall-photo.jpg       # per-image crop tweaks
+#    anchor: top                # center, top, bottom, left, right, top-left, ... or [x, y] in 0..1
+#    zoom: 1.2                  # >1 zooms in
+filter: landscape + !night      # tag filter (pictures/tags.yml); "" for none
+interval: 15m                   # slideshow: time per image (s, m, h)
+transition: 2s                  # slideshow: cross-fade length
+shuffle: false

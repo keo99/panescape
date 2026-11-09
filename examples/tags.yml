@@ -1,0 +1,4 @@
+# Copy to pictures/tags.yml. Keys are file names (or globs) in pictures/.
+alpine-valley.jpg: [landscape, mountains, snow]
+lake-dawn.jpg: [landscape, water]
+"city-*": [urban, night]
