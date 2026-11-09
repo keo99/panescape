@@ -1,0 +1,376 @@
+"""Command line interface.
+
+    panescape init                      scaffold a project folder
+    panescape detect [--write NAME]     show GNOME's monitors / write a config skeleton
+    panescape make [IMAGES] [--apply]   crop + slice images into backgrounds/
+    panescape apply [IMAGES]            apply one image, or a slideshow (default: setup.yml)
+    panescape add IMAGES                pin images into the current slideshow
+    panescape sync                      re-check tags/pictures/setup.yml, update the slideshow
+    panescape tag IMAGES -a T -r T      add / remove tags (pictures/tags.yml)
+    panescape tags [FILTER]             list images and their tags
+    panescape status                    show configurations, pictures and what is applied
+"""
+
+from __future__ import annotations
+
+import argparse
+import os
+import sys
+from pathlib import Path
+
+import yaml
+
+from . import __version__, backends, models
+from .config import ROTATION_NAMES, ConfigError
+from .project import Project, ProjectError
+from .units import parse_duration
+
+EXAMPLE_SETUP = """\
+# panescape setup: what `panescape apply` (with no arguments) puts on the desktop.
+configuration: {config}   # a file in ./configurations (without .yml)
+mode: slideshow            # single | slideshow
+images: all                # 'all' (everything in ./pictures) or a list, e.g.
+#  - mountains.jpg
+#  - "city-*.png"           # globs work
+#  - file: tall-photo.jpg   # per-image crop tweaks
+#    anchor: top            # center, top, bottom, left, right, top-left, ... or [x, y] in 0..1
+#    zoom: 1.2              # >1 zooms in
+filter: ""                 # tag filter on 'images', e.g. landscape + water + !mountains
+interval: 15m              # time per image in a slideshow (s, m, h)
+transition: 2s             # cross-fade length
+shuffle: false
+# crop:                    # defaults for every image (override per image above)
+#   anchor: center
+#   fit: cover             # cover (fill, crop edges) | contain (show all, black bars)
+"""
+
+
+def _project(args) -> Project:
+    root = args.root or os.environ.get("PANESCAPE_ROOT") or "."
+    return Project(root)
+
+
+def _backend(required=True):
+    be = backends.detect()
+    if be is None and required:
+        raise ProjectError("no supported desktop found (only GNOME is supported for applying so far); "
+                           "the slices in backgrounds/ can still be set with your own tool")
+    return be
+
+
+def _crop_override(args) -> dict:
+    out = {}
+    if getattr(args, "anchor", None):
+        a = args.anchor
+        out["anchor"] = [float(v) for v in a.split(",")] if "," in a else a
+    if getattr(args, "zoom", None):
+        out["zoom"] = args.zoom
+    if getattr(args, "fit", None):
+        out["fit"] = args.fit
+    return out
+
+
+def cmd_init(args) -> None:
+    proj = _project(args)
+    for d in (proj.pictures, proj.configurations, proj.backgrounds):
+        d.mkdir(parents=True, exist_ok=True)
+    if not proj.setup_file.exists():
+        configs = sorted(proj.configurations.glob("*.y*ml"))
+        proj.setup_file.write_text(EXAMPLE_SETUP.format(config=configs[0].stem if configs else "my_desk"))
+        print(f"wrote {proj.setup_file}")
+    print(f"project ready in {proj.root}\n  1. put images in pictures/\n"
+          f"  2. run 'panescape detect --write my_desk' and edit configurations/my_desk.yml\n"
+          f"  3. run 'panescape make' then 'panescape apply'")
+
+
+def cmd_detect(args) -> None:
+    be = _backend()
+    lay = be.get_layout()
+    mons = sorted(lay.monitors, key=lambda m: (m.center_x, m.y))
+    print(f"GNOME layout ({'logical' if lay.logical else 'physical'} pixels), left to right:")
+    for m in mons:
+        known = models.lookup(m.product)
+        print(f"  {m.connector:<7} {m.display_name:<32} {m.product:<14} serial {m.serial:<12} "
+              f"{m.mode[0]}x{m.mode[1]} {ROTATION_NAMES[m.rotation]:<17} scale {m.scale:g} "
+              f"at ({m.x},{m.y})  {'[known model]' if known else ''}")
+    if not args.write:
+        return
+    proj = _project(args)
+    names = {1: ["main"], 2: ["left", "right"], 3: ["left", "centre", "right"]}.get(
+        len(mons), [f"monitor{i + 1}" for i in range(len(mons))])
+    entries = []
+    for i, (m, name) in enumerate(zip(mons, names, strict=False)):
+        known = models.lookup(m.product)
+        e = {"name": name}
+        if known:
+            e["model"] = known["model"].title()
+        else:
+            e["resolution"] = f"{m.mode[0]}x{m.mode[1]}"
+            e["size"] = "TODO  # diagonal, e.g. 27in, or use active_area: [w, h] mm"
+        e["serial"] = m.serial
+        e["rotation"] = ROTATION_NAMES[m.rotation]
+        if i:
+            e["gap"] = 0
+            e["v_pos"] = 0
+        entries.append(e)
+    path = proj.configurations / f"{args.write}.yml"
+    if path.exists() and not args.overwrite:
+        raise ProjectError(f"{path} exists (use --overwrite)")
+    path.parent.mkdir(parents=True, exist_ok=True)
+    text = ("# Generated by panescape detect. Monitors are listed left to right.\n"
+            "# Fill in gap / v_pos / bezel from measurements (mm). See README for every key.\n"
+            + yaml.safe_dump({"name": args.write, "monitors": entries}, sort_keys=False))
+    path.write_text(text)
+    print(f"wrote {path}")
+
+
+def _print_render(proj, r) -> None:
+    rel = r.out_dir.relative_to(proj.root) if r.out_dir.is_relative_to(proj.root) else r.out_dir
+    print(f"{'cached  ' if r.skipped else 'rendered'} {r.job.source.name} -> {rel}/")
+    for w in r.warnings:
+        print(f"  warning: {w}")
+
+
+def cmd_make(args) -> None:
+    proj = _project(args)
+    cfg = proj.load_config(args.config)
+    for m in cfg.monitors:
+        for n in m.notes:
+            print(f"note [{m.name}]: {n}")
+    jobs = proj.filter_jobs(proj.resolve_images(args.images or None), args.filter)
+    override = _crop_override(args)
+    for job in jobs:
+        job.crop.update(override)
+        _print_render(proj, proj.render(cfg, job, force=args.force))
+    if args.apply:
+        rule = _cli_rule(proj, args, mode="slideshow" if args.slideshow else "auto")
+        proj.run(_backend(), rule, dry_run=args.dry_run)
+
+
+def _cli_specs(proj: Project, images: list[str]) -> list[str]:
+    """Keep globs as globs (so new matching files join later); pin names to paths."""
+    out = []
+    for item in images:
+        if any(c in item for c in "*?["):
+            out.append(item)
+        else:
+            out += [str(j.source) for j in proj.resolve_images([item])]
+    return out
+
+
+def _cli_rule(proj: Project, args, mode: str) -> dict:
+    setup = proj.load_setup()
+    return {
+        "source": "cli",
+        "images": _cli_specs(proj, args.images) if args.images else "all",
+        "filter": args.filter, "mode": mode,
+        "configuration": str(proj.config_path(args.config)),
+        "interval": args.interval or setup.get("interval", "10m"),
+        "transition": args.transition or setup.get("transition", "2s"),
+        "shuffle": bool(args.shuffle or setup.get("shuffle", False)),
+        "crop": _crop_override(args) or None,
+    }
+
+
+def cmd_apply(args) -> None:
+    proj = _project(args)
+    mode = "slideshow" if args.slideshow else ("single" if args.single else None)
+    if args.images:
+        rule = _cli_rule(proj, args, mode or "auto")
+    else:
+        if not proj.load_setup():
+            raise ProjectError(f"no images given and no {proj.setup_file.name}; run 'panescape init'")
+        # follow setup.yml; anything given on the command line overrides it
+        rule = {"source": "setup", "configuration": args.config, "filter": args.filter, "mode": mode,
+                "interval": args.interval, "transition": args.transition,
+                "shuffle": True if args.shuffle else None, "crop": _crop_override(args) or None}
+        rule = {k: v for k, v in rule.items() if v is not None}
+    proj.run(_backend(), rule, force=args.force, dry_run=args.dry_run)
+
+
+def cmd_add(args) -> None:
+    proj = _project(args)
+    if not args.images and not args.filter:
+        raise ProjectError("give images and/or --filter")
+    jobs = proj.filter_jobs(proj.resolve_images(args.images or None), args.filter)
+    proj.sync(_backend(), add=[str(j.source) for j in jobs], interval=args.interval,
+              transition=args.transition, dry_run=args.dry_run)
+
+
+def cmd_sync(args) -> None:
+    proj = _project(args)
+    proj.sync(_backend(), force=args.force, dry_run=args.dry_run)
+
+
+def cmd_tag(args) -> None:
+    from .tags import load_tags, norm_tag, save_tags
+    proj = _project(args)
+    if not (args.add or args.remove or args.clear):
+        raise ProjectError("nothing to do: use -a TAG, -r TAG or --clear")
+    tags = load_tags(proj.tags_file)
+    for job in proj.resolve_images(args.images):
+        name = job.source.name
+        if job.source.parent.resolve() != proj.pictures.resolve():
+            raise ProjectError(f"{name}: only images in {proj.pictures} can be tagged")
+        cur = set() if args.clear else set(tags.get(name, set()))
+        cur |= {norm_tag(t) for t in args.add or []}
+        cur -= {norm_tag(t) for t in args.remove or []}
+        tags[name] = cur
+        print(f"{name}: {', '.join(sorted(cur)) or '(no tags)'}")
+    proj.pictures.mkdir(parents=True, exist_ok=True)
+    save_tags(proj.tags_file, tags)
+    be = backends.detect()
+    if args.no_sync or not proj.load_state() or be is None:
+        return
+    print("updating the current wallpaper:")
+    try:
+        proj.sync(be)
+    except ProjectError as e:
+        print(f"  not updated: {e}")
+
+
+def cmd_tags(args) -> None:
+    from .tags import compile_filter, load_tags, tags_for
+    proj = _project(args)
+    tags = load_tags(proj.tags_file)
+    pred = compile_filter(args.filter)[0] if args.filter else (lambda s: True)
+    counts: dict[str, int] = {}
+    shown = 0
+    for p in proj.all_pictures():
+        ts = tags_for(p.name, tags)
+        for t in ts:
+            counts[t] = counts.get(t, 0) + 1
+        if pred(ts):
+            shown += 1
+            print(f"  {p.name:<40} {', '.join(sorted(ts)) or '-'}")
+    total = len(proj.all_pictures())
+    print(f"{shown} of {total} images" + (f" match {args.filter!r}" if args.filter else ""))
+    if counts and not args.filter:
+        print("tags: " + ", ".join(f"{t} ({n})" for t, n in sorted(counts.items())))
+
+
+def cmd_status(args) -> None:
+    proj = _project(args)
+    print(f"project:        {proj.root}")
+    configs = sorted(proj.configurations.glob("*.y*ml"))
+    print(f"configurations: {', '.join(c.stem for c in configs) or '(none)'}")
+    print(f"setup default:  {proj.load_setup().get('configuration', '(none)')}")
+    pics = proj.all_pictures()
+    print(f"pictures:       {len(pics)}")
+    for p in pics:
+        done = [c.stem for c in configs if (proj.backgrounds / c.stem / p.stem / "meta.json").exists()]
+        print(f"  {p.name:<40} {'made for: ' + ', '.join(done) if done else 'not made yet'}")
+    state = proj.load_state()
+    if state:
+        print(f"applied:        {state['mode']} of {len(state.get('order', state.get('images', [])))} image(s), "
+              f"config {Path(state['configuration']).stem}, at {state['applied']}")
+    be = backends.detect()
+    if be:
+        try:
+            print(f"desktop uri:    {be.current_uri()}")
+        except Exception:  # noqa: BLE001 - status is best effort
+            pass
+
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(prog="panescape", description="Physically accurate wallpapers spanning "
+                                "monitors of different sizes, resolutions and orientations.")
+    p.add_argument("--version", action="version", version=f"panescape {__version__}")
+    p.add_argument("--root", help="project folder (default: $PANESCAPE_ROOT or current directory)")
+    sub = p.add_subparsers(dest="command", required=True)
+
+    s = sub.add_parser("init", help="create pictures/, configurations/, backgrounds/ and setup.yml")
+    s.set_defaults(func=cmd_init)
+
+    s = sub.add_parser("detect", help="show the monitors GNOME sees; optionally write a config skeleton")
+    s.add_argument("--write", metavar="NAME", help="write configurations/NAME.yml")
+    s.add_argument("--overwrite", action="store_true")
+    s.set_defaults(func=cmd_detect)
+
+    def crop_args(s):
+        s.add_argument("--anchor", help="crop anchor: center, top, bottom, left, right, top-left, ... or X,Y (0..1)")
+        s.add_argument("--zoom", type=float, help="zoom factor (>1 crops tighter)")
+        s.add_argument("--fit", choices=["cover", "contain"])
+
+    def apply_args(s):
+        s.add_argument("--interval", help="time per slideshow image, e.g. 30s, 10m, 1h")
+        s.add_argument("--transition", help="cross-fade time, e.g. 2s (0 for none)")
+        s.add_argument("--shuffle", action="store_true")
+        s.add_argument("--dry-run", action="store_true", help="build everything but don't change the wallpaper")
+        s.add_argument("--filter", help="tag filter, e.g. 'landscape + water + !mountains' (overrides setup.yml)")
+
+    s = sub.add_parser("make", help="crop and slice images (default: everything in pictures/)")
+    s.add_argument("images", nargs="*")
+    s.add_argument("-c", "--config", help="configuration name or path")
+    s.add_argument("-f", "--force", action="store_true", help="re-render even if up to date")
+    s.add_argument("--apply", action="store_true", help="apply afterwards (several images = slideshow)")
+    s.add_argument("--slideshow", action="store_true", help="with --apply: slideshow even for one image")
+    crop_args(s)
+    apply_args(s)
+    s.set_defaults(func=cmd_make)
+
+    s = sub.add_parser("apply", help="apply images (default: what setup.yml says)")
+    s.add_argument("images", nargs="*")
+    s.add_argument("-c", "--config")
+    s.add_argument("-f", "--force", action="store_true")
+    g = s.add_mutually_exclusive_group()
+    g.add_argument("--slideshow", action="store_true")
+    g.add_argument("--single", action="store_true", help="only the first image")
+    crop_args(s)
+    apply_args(s)
+    s.set_defaults(func=cmd_apply)
+
+    s = sub.add_parser("add", help="pin images into the current slideshow (kept even if they stop matching; "
+                           "turns a single image into a slideshow)")
+    s.add_argument("images", nargs="*")
+    s.add_argument("--filter", help="pin every picture matching this tag filter now")
+    s.add_argument("-c", "--config")
+    s.add_argument("--interval")
+    s.add_argument("--transition")
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_add)
+
+    s = sub.add_parser("sync", help="re-check the applied selection (tags, pictures, setup.yml) and update")
+    s.add_argument("-f", "--force", action="store_true")
+    s.add_argument("--dry-run", action="store_true")
+    s.set_defaults(func=cmd_sync)
+
+    s = sub.add_parser("tag", help="add/remove tags on images (stored in pictures/tags.yml)")
+    s.add_argument("images", nargs="+", help="names, paths or globs in pictures/")
+    s.add_argument("-a", "--add", nargs="+", metavar="TAG")
+    s.add_argument("-r", "--remove", nargs="+", metavar="TAG")
+    s.add_argument("--clear", action="store_true", help="remove all tags first")
+    s.add_argument("--no-sync", action="store_true", help="don't update the running slideshow")
+    s.set_defaults(func=cmd_tag)
+
+    s = sub.add_parser("tags", help="list images and tags, optionally filtered")
+    s.add_argument("filter", nargs="?", help="e.g. 'landscape + water + !mountains'")
+    s.set_defaults(func=cmd_tags)
+
+    s = sub.add_parser("status", help="show what is configured, made and applied")
+    s.set_defaults(func=cmd_status)
+    return p
+
+
+def main(argv=None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        if getattr(args, "interval", None):
+            parse_duration(args.interval)
+        args.func(args)
+    except (ProjectError, ConfigError, ValueError, FileNotFoundError) as e:
+        print(f"panescape: error: {e}", file=sys.stderr)
+        return 1
+    except KeyboardInterrupt:
+        return 130
+    except Exception as e:  # backend errors etc.
+        if type(e).__name__ == "BackendError":
+            print(f"panescape: error: {e}", file=sys.stderr)
+            return 1
+        raise
+    return 0
+
+
+def main_apply() -> int:
+    """Entry point for the separate ``panescape-apply`` command."""
+    return main(["apply", *sys.argv[1:]])
