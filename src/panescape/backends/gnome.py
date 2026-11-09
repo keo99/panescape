@@ -136,11 +136,14 @@ def get_layout() -> OsLayout:
     return OsLayout(result, logical)
 
 
-def match_monitors(config_monitors, os_layout: OsLayout) -> dict:
+def match_monitors(config_monitors, os_layout: OsLayout, centres: dict | None = None) -> dict:
     """Return {config monitor name: OsMonitor}.
 
-    Explicit ``connector`` / ``serial`` / ``product`` keys win; the rest are
-    paired left-to-right by position in GNOME's layout.
+    Explicit ``connector`` / ``serial`` / ``product`` keys win. The rest are
+    paired by arrangement: ``centres`` ({name: (x, y)} in mm, from the physical
+    layout) is compared with GNOME's layout after normalising both to their
+    bounding boxes, so rows, columns and grids pair up. Without ``centres``
+    they are paired left to right.
     """
     remaining = sorted(os_layout.monitors, key=lambda m: (m.center_x, m.y))
     result = {}
@@ -155,16 +158,49 @@ def match_monitors(config_monitors, os_layout: OsLayout) -> dict:
             remaining.remove(hit[0])
         else:
             pending.append(cm)
-    # positional pairing keeps the configuration's left-to-right order
-    if pending:
-        if len(remaining) < len(pending):
-            raise BackendError(f"configuration has {len(config_monitors)} monitors but GNOME has "
-                               f"{len(os_layout.monitors)} active; add connector/serial keys or fix the layout")
-        builtin_free = [om for om in remaining if not om.builtin]
-        pool = builtin_free if len(builtin_free) >= len(pending) else remaining
-        for cm, om in zip(pending, pool, strict=False):
-            result[cm.name] = om
+    if not pending:
+        return result
+    if len(remaining) < len(pending):
+        raise BackendError(f"configuration has {len(config_monitors)} monitors but GNOME has "
+                           f"{len(os_layout.monitors)} active; add connector/serial keys or fix the layout")
+    builtin_free = [om for om in remaining if not om.builtin]
+    pool = builtin_free if len(builtin_free) >= len(pending) else remaining
+    if centres and len(pending) > 1:
+        pairs = _match_by_arrangement(pending, pool, centres)
+    else:
+        pairs = list(zip(pending, pool, strict=False))  # pool may be larger
+    for cm, om in pairs:
+        result[cm.name] = om
     return result
+
+
+def _normalise(points: list[tuple[float, float]]) -> list[tuple[float, float]]:
+    xs, ys = [p[0] for p in points], [p[1] for p in points]
+    sx, sy = (max(xs) - min(xs)) or 1.0, (max(ys) - min(ys)) or 1.0
+    return [((x - min(xs)) / sx, (y - min(ys)) / sy) for x, y in points]
+
+
+def _match_by_arrangement(pending, pool, centres) -> list:
+    """Assign config monitors to OS monitors minimising the normalised distance."""
+    from itertools import permutations
+
+    cfg_pts = _normalise([centres[cm.name] for cm in pending])
+    os_pts = _normalise([(om.center_x, om.y + om.height / 2) for om in pool])
+
+    def cost(i: int, j: int) -> float:
+        return (cfg_pts[i][0] - os_pts[j][0]) ** 2 + (cfg_pts[i][1] - os_pts[j][1]) ** 2
+
+    n = len(pending)
+    if len(pool) <= 8:
+        best = min(permutations(range(len(pool)), n),
+                   key=lambda perm: sum(cost(i, j) for i, j in enumerate(perm)))
+        return [(pending[i], pool[j]) for i, j in enumerate(best)]
+    used, pairs = set(), []  # large setups: greedy
+    for i in range(n):
+        j = min((j for j in range(len(pool)) if j not in used), key=lambda j: cost(i, j))
+        used.add(j)
+        pairs.append((pending[i], pool[j]))
+    return pairs
 
 
 def compose(os_layout: OsLayout, render_for, background="#000000") -> Image.Image:
@@ -249,6 +285,25 @@ def set_wallpaper(path: Path, color: str = "#000000") -> None:
 
 def current_uri() -> str:
     return _gget("picture-uri")
+
+
+SNAPSHOT_KEYS = ("picture-uri", "picture-uri-dark", "picture-options", "primary-color", "color-shading-type")
+
+
+def snapshot() -> dict:
+    """Current background settings, as GVariant text, for restore()."""
+    out = {}
+    for key in SNAPSHOT_KEYS:
+        r = subprocess.run([_system_gsettings(), "get", SCHEMA, key], capture_output=True, text=True,
+                           check=True, env=_env())
+        out[key] = r.stdout.strip()
+    return out
+
+
+def restore(snap: dict) -> None:
+    for key in SNAPSHOT_KEYS:
+        if key in snap:
+            _gset(key, snap[key])
 
 
 # --------------------------------------------------------------------------- slideshows

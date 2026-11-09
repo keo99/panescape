@@ -59,29 +59,76 @@ def _outer_y(m: Monitor, ref: Rect) -> float:
     return (ref.y + ref.h / 2) - m.v_pos - h / 2
 
 
+def _outer_x(m: Monitor, ref: Rect) -> float:
+    """Left of m's housing so that its h_align edge is h_pos mm *right* of ref's."""
+    w, _ = m.outer
+    if m.h_align == "left":
+        return ref.x + m.h_pos
+    if m.h_align == "right":
+        return ref.x1 + m.h_pos - w
+    return (ref.x + ref.w / 2) + m.h_pos - w / 2
+
+
+def _dependencies(cfg: Configuration, i: int) -> tuple[str | None, list[str]]:
+    """(placement rule, monitors that must be placed first) for monitor i.
+
+    Rules: 'origin', 'position', 'right_of', 'left_of', 'below', 'above'.
+    A monitor with no placement keys sits right of the previous one in the
+    list, with v_pos measured from the first monitor (a simple row).
+    """
+    m = cfg.monitors[i]
+    if m.position is not None:
+        return "position", []
+    if m.attach is None:
+        if i == 0:
+            return "origin", []
+        side, target = "right_of", cfg.monitors[i - 1].name
+        vref = m.v_ref or cfg.monitors[0].name
+        return side, [target, vref]
+    side, target = m.attach
+    if side in ("right_of", "left_of"):
+        return side, [target, m.v_ref or target]
+    return side, [target, m.h_ref or target]
+
+
 def compute_layout(cfg: Configuration) -> Layout:
-    placed: list[Placed] = []
-    by_name: dict[str, Rect] = {}
-    cursor_x = 0.0
-    for i, m in enumerate(cfg.monitors):
-        ow, oh = m.outer
-        if m.position is not None:
-            outer = Rect(m.position[0], m.position[1], ow, oh)
-        elif i == 0:
-            outer = Rect(0.0, -oh / 2, ow, oh)
-        else:
-            x = cursor_x + m.gap
-            ref_name = m.v_ref or cfg.monitors[0].name
-            ref = by_name.get(ref_name)
-            if ref is None:
-                raise ValueError(f"monitor {m.name!r}: v_ref {ref_name!r} must be listed before it")
-            outer = Rect(x, 0.0, ow, oh)
-            outer.y = _outer_y(m, ref)
+    outer: dict[str, Rect] = {}
+    pending = list(range(len(cfg.monitors)))
+    while pending:
+        progressed = False
+        for i in list(pending):
+            m = cfg.monitors[i]
+            rule, deps = _dependencies(cfg, i)
+            if any(d not in outer for d in deps):
+                continue
+            ow, oh = m.outer
+            if rule == "position":
+                r = Rect(m.position[0], m.position[1], ow, oh)
+            elif rule == "origin":
+                r = Rect(0.0, -oh / 2, ow, oh)
+            else:
+                target = outer[deps[0]]
+                ref = outer[deps[1]]
+                if rule == "right_of":
+                    r = Rect(target.x1 + m.gap, _outer_y(m, ref), ow, oh)
+                elif rule == "left_of":
+                    r = Rect(target.x - m.gap - ow, _outer_y(m, ref), ow, oh)
+                elif rule == "below":
+                    r = Rect(_outer_x(m, ref), target.y1 + m.gap, ow, oh)
+                else:  # above
+                    r = Rect(_outer_x(m, ref), target.y - m.gap - oh, ow, oh)
+            outer[m.name] = r
+            pending.remove(i)
+            progressed = True
+        if not progressed:
+            names = ", ".join(cfg.monitors[i].name for i in pending)
+            raise ValueError(f"monitor placement refers in a circle: {names}")
+
+    placed = []
+    for m in cfg.monitors:
+        o = outer[m.name]
         aw, ah = m.active
-        active = Rect(outer.x + m.bezel["left"], outer.y + m.bezel["top"], aw, ah)
-        placed.append(Placed(m, outer, active))
-        by_name[m.name] = outer
-        cursor_x = outer.x1
+        placed.append(Placed(m, o, Rect(o.x + m.bezel["left"], o.y + m.bezel["top"], aw, ah)))
 
     x0 = min(p.active.x for p in placed)
     y0 = min(p.active.y for p in placed)

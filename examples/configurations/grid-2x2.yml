@@ -1,0 +1,34 @@
+# Four 27" 1440p monitors in a 2x2 grid.
+# The first monitor is the anchor; each other one says where it sits relative to
+# a neighbour (right_of / left_of / below / above) plus the measured spacing.
+name: grid-2x2
+defaults:
+  bezel: 7                      # all four have 7 mm bezels
+monitors:
+  - name: top-left
+    resolution: QHD
+    size: 27in
+
+  - name: top-right
+    resolution: QHD
+    size: 27in
+    right_of: top-left
+    gap: 1                      # mm between the housings
+    v_align: top                # tops are level...
+    v_pos: 0                    # ...exactly
+
+  - name: bottom-left
+    resolution: QHD
+    size: 27in
+    below: top-left
+    gap: 2
+    h_align: left               # left edges are level
+    h_pos: 0
+
+  - name: bottom-right
+    resolution: QHD
+    size: 27in
+    right_of: bottom-left       # (or: below: top-right)
+    gap: 1
+    v_align: top
+    v_pos: 0

@@ -23,6 +23,7 @@ ROTATIONS = {
 }
 ROTATION_NAMES = {0: "landscape", 90: "portrait-right", 180: "landscape-flipped", 270: "portrait-left"}
 SIDES = ("top", "right", "bottom", "left")
+ATTACH_SIDES = ("right_of", "left_of", "below", "above")
 
 
 class ConfigError(ValueError):
@@ -89,7 +90,11 @@ class Monitor:
     gap: float = 0.0                     # mm from previous monitor's housing; -ve = overlap
     v_pos: float = 0.0                   # mm, +ve = up, relative to v_ref
     v_align: str = "center"              # which edges v_pos is measured between
-    v_ref: str | None = None             # monitor name (default: first monitor)
+    v_ref: str | None = None             # monitor name (default: attached-to, else first monitor)
+    h_pos: float = 0.0                   # mm, +ve = right, relative to h_ref (stacked monitors)
+    h_align: str = "center"              # which edges h_pos is measured between
+    h_ref: str | None = None             # monitor name (default: the one it is below/above)
+    attach: tuple[str, str] | None = None  # (right_of|left_of|below|above, monitor name)
     position: tuple[float, float] | None = None  # explicit housing top-left (mm, y down)
     model: str | None = None
     match: dict = field(default_factory=dict)
@@ -230,6 +235,18 @@ def _monitor_from_entry(i: int, entry: dict, defaults: dict) -> Monitor:
     v_align = str(entry.get("v_align", defaults.get("v_align", "center"))).lower().replace("centre", "center")
     if v_align not in ("center", "top", "bottom"):
         raise ConfigError(f"monitor {name!r}: v_align must be center, top or bottom")
+    h_align = str(entry.get("h_align", defaults.get("h_align", "center"))).lower().replace("centre", "center")
+    if h_align not in ("center", "left", "right"):
+        raise ConfigError(f"monitor {name!r}: h_align must be center, left or right")
+
+    attach = None
+    sides = [k for k in ATTACH_SIDES if entry.get(k) is not None]
+    if len(sides) > 1:
+        raise ConfigError(f"monitor {name!r}: use only one of {', '.join(ATTACH_SIDES)}")
+    if sides:
+        if position is not None:
+            raise ConfigError(f"monitor {name!r}: 'position' and '{sides[0]}' can't be combined")
+        attach = (sides[0], str(entry[sides[0]]))
 
     match = {}
     for key in ("connector", "serial", "product", "vendor"):
@@ -249,6 +266,10 @@ def _monitor_from_entry(i: int, entry: dict, defaults: dict) -> Monitor:
         v_pos=parse_length(entry.get("v_pos", 0) or 0),
         v_align=v_align,
         v_ref=entry.get("v_ref"),
+        h_pos=parse_length(entry.get("h_pos", 0) or 0),
+        h_align=h_align,
+        h_ref=entry.get("h_ref"),
+        attach=attach,
         position=position,
         model=model["model"] if model else model_name,
         match=match,
@@ -280,8 +301,16 @@ def configuration_from_dict(raw: dict, name: str = "config", path: Path | None =
     if len(set(names)) != len(names):
         raise ConfigError("monitor names must be unique")
     for m in mons:
-        if m.v_ref is not None and m.v_ref not in names:
-            raise ConfigError(f"monitor {m.name!r}: v_ref {m.v_ref!r} is not a monitor name")
+        refs = {"v_ref": m.v_ref, "h_ref": m.h_ref, m.attach[0] if m.attach else "": m.attach and m.attach[1]}
+        for key, ref in refs.items():
+            if ref is None or ref is False:
+                continue
+            if ref not in names:
+                raise ConfigError(f"monitor {m.name!r}: {key} {ref!r} is not a monitor name")
+            if ref == m.name:
+                raise ConfigError(f"monitor {m.name!r}: {key} can't refer to itself")
+    if mons[0].attach:
+        raise ConfigError(f"the first monitor ({mons[0].name!r}) is the anchor; attach the others to it instead")
     return Configuration(
         name=str(name),
         path=path,

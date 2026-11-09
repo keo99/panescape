@@ -1,0 +1,16 @@
+# A 32" 4K monitor with a 14" laptop screen below it, a little left of centre.
+name: laptop-under-monitor
+monitors:
+  - name: monitor
+    resolution: 4K
+    size: 32in
+    bezel: {left: 8, right: 8, top: 8, bottom: 20}
+
+  - name: laptop
+    resolution: 1920x1200
+    size: 14in
+    bezel: {left: 5, right: 5, top: 8, bottom: 15}
+    below: monitor
+    gap: 110                    # stand + keyboard area between the housings
+    h_align: center             # measure between the centres...
+    h_pos: -40                  # ...the laptop is 40 mm left of the monitor's centre
