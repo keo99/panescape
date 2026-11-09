@@ -20,6 +20,7 @@ from .units import parse_duration
 
 IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".bmp", ".tif", ".tiff", ".gif", ".avif", ".heic"}
 STATE_FILE = ".panescape-state.json"
+RESTORE_FILE = ".calibrate-restore.json"  # wallpaper saved by `panescape calibrate`
 
 
 class ProjectError(RuntimeError):
@@ -342,7 +343,9 @@ class Project:
                rule: dict, pinned: list, continuity: bool) -> Path | None:
         old = self.load_state()
         os_layout = backend.get_layout()
-        pairing = backend.match_monitors(cfg.monitors, os_layout)
+        centres = {p.monitor.name: (p.active.x + p.active.w / 2, p.active.y + p.active.h / 2)
+                   for p in compute_layout(cfg)}
+        pairing = backend.match_monitors(cfg.monitors, os_layout, centres)
         for name, om in pairing.items():
             _log(f"  {name:<10} -> {om.connector} ({om.display_name}, serial {om.serial})")
         for om in os_layout.monitors:
@@ -378,7 +381,8 @@ class Project:
             unchanged = (old.get("mode") == mode and old.get("order") == order
                          and old.get("composites") == [comp[o] for o in order]
                          and old.get("interval_s") == secs and old.get("transition_s") == trans
-                         and Path(old.get("target", "")).exists())
+                         and Path(old.get("target", "")).exists()
+                         and _is_current(backend, old.get("target", "")))
             if unchanged and not force:
                 _log("wallpaper already up to date")
                 self.save_state({**old, "rule": rule, "pinned": pinned})
@@ -400,6 +404,7 @@ class Project:
                 target.unlink()
             return target
         backend.set_wallpaper(target)
+        (self.backgrounds / RESTORE_FILE).unlink(missing_ok=True)  # calibration superseded
         if slideshow:  # old slideshow files are no longer referenced
             for f in (self.backgrounds / cfg.name / "slideshows").glob("slideshow-*.xml"):
                 if f != target:
@@ -427,3 +432,14 @@ def _continue_start(old: dict, order: list[str], secs: float, now: float) -> flo
     current = old_order[min(idx, len(old_order) - 1)]
     j = order.index(current) if current in order else min(idx, len(order) - 1)
     return now - (j * secs + within)
+
+
+def _is_current(backend, target: str) -> bool:
+    """Is ``target`` what the desktop shows now (e.g. not replaced by calibrate)?"""
+    get = getattr(backend, "current_uri", None)
+    if get is None:
+        return True
+    try:
+        return get() == Path(target).resolve().as_uri()
+    except Exception:  # noqa: BLE001 - be permissive, reapplying is harmless
+        return False
