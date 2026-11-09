@@ -225,6 +225,11 @@ across the bezels. To fix it:
    `h_pos += the other screen's reading − this screen's reading`.
 4. **Check.** The diagonals and the circle should now be straight and continuous.
 
+**Angled screens:** if your outer screens are turned or tilted towards you,
+they don't lie in one plane, so the ruler readings don't line up exactly.
+Instead, tune from your seat, matching lines near eye level. Lines far above or
+below that height will drift slightly on the angled screens.
+
 Without a supported desktop, the pattern is written as per-monitor images in
 `backgrounds/<config>/calibration/`.
 
