@@ -281,6 +281,9 @@ def cmd_calibrate(args) -> None:
     def build() -> None:
         print(proj.apply_calibration(be, proj.load_config(str(path))))
 
+    from .backends.base import competing_tools
+    for w in competing_tools():
+        print(f"warning: {w}")
     proj.begin_calibration(be)
     try:
         build()

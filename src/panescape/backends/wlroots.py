@@ -33,6 +33,7 @@ from .base import (  # noqa: F401 - match_monitors is part of the backend interf
     match_monitors,
     native_size,
 )
+from .base import running as _running
 
 KIND = "per_output"  # one image per output
 SETTERS = ("sway", "hyprpaper", "swww", "swaybg")
@@ -129,20 +130,6 @@ def choose_setter(preferred: str | None = None) -> str:
         return "swaybg"
     raise BackendError("no wallpaper tool found: install hyprpaper, swww or swaybg "
                        "(or start hyprpaper / swww-daemon)")
-
-
-def _running(name: str) -> bool:
-    """Is a process with this name running for this user? (/proc, no psutil needed)"""
-    uid = os.getuid()
-    for d in Path("/proc").iterdir():
-        if not d.name.isdigit():
-            continue
-        try:
-            if d.stat().st_uid == uid and (d / "comm").read_text().strip() == name[:15]:
-                return True
-        except OSError:
-            continue
-    return False
 
 
 def _pidfile() -> Path:

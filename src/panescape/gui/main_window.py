@@ -52,6 +52,14 @@ class MainWindow(QMainWindow):
         bar.addWidget(where)
         root.addLayout(bar)
 
+        from ..backends.base import competing_tools
+        warnings = competing_tools()
+        self.warning = QLabel("⚠ " + "<br>⚠ ".join(warnings))
+        self.warning.setWordWrap(True)
+        self.warning.setStyleSheet("background: #fff3cd; color: #664d03; padding: 6px; border-radius: 4px")
+        self.warning.setVisible(bool(warnings))
+        root.addWidget(self.warning)
+
         self.tabs = QTabWidget()
         self.layout_editor = LayoutEditor(project)
         self.layout_editor.message.connect(lambda m: self.statusBar().showMessage(m, 8000))

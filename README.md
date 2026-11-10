@@ -52,6 +52,11 @@ monitor should show* from the physical layout, and builds the images those
 tools need. On GNOME it applies them directly, slideshows included, with
 nothing running in the background.
 
+If you used HydraPaper before, switch off its daemon in HydraPaper's
+preferences. Otherwise it re-applies its own wallpaper whenever the displays
+change, for example when the monitors wake up. panescape warns when it sees
+HydraPaper's daemon or Variety running.
+
 ## The window
 
 ```bash

@@ -5,8 +5,10 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from dataclasses import dataclass
 from itertools import permutations
+from pathlib import Path
 
 # wl_output / Mutter transform -> rotation in degrees (GNOME Settings sense:
 # 90 = "Portrait Right"). 4-7 are the flipped variants.
@@ -15,6 +17,58 @@ TRANSFORM_ROTATION = {0: 0, 1: 90, 2: 180, 3: 270, 4: 0, 5: 90, 6: 180, 7: 270}
 
 class BackendError(RuntimeError):
     pass
+
+
+def running(name: str) -> bool:
+    """Is a process with this name running for this user? (/proc, no psutil needed)"""
+    proc = Path("/proc")
+    if not proc.is_dir():
+        return False
+    uid = os.getuid()
+    for d in proc.iterdir():
+        if not d.name.isdigit():
+            continue
+        try:
+            if d.stat().st_uid == uid and (d / "comm").read_text().strip() == name[:15]:
+                return True
+        except OSError:
+            continue
+    return False
+
+
+def _hydrapaper_daemon_enabled() -> bool:
+    """hydrapaperd keeps running after it is switched off; its config says whether it acts."""
+    home = Path.home()
+    for cfg in (Path(os.environ.get("XDG_CONFIG_HOME") or home / ".config") / "org.gabmus.hydrapaper.json",
+                home / ".var/app/org.gabmus.hydrapaper/config/org.gabmus.hydrapaper.json"):
+        try:
+            return bool(json.loads(cfg.read_text()).get("enable_daemon", False))
+        except (OSError, ValueError):
+            continue
+    return True  # running but no readable config: assume it acts
+
+
+# Programs that set the wallpaper on their own and so replace panescape's.
+# name -> (process name, extra check, advice)
+WALLPAPER_TOOLS = {
+    "HydraPaper": ("hydrapaperd", _hydrapaper_daemon_enabled,
+                   "its background service re-applies HydraPaper's wallpaper whenever the displays change "
+                   "(e.g. after the monitors sleep). Switch the daemon off in HydraPaper's preferences."),
+    "Variety": ("variety", None, "it changes the wallpaper on its own schedule. Quit Variety, or turn off "
+                "its automatic changes."),
+}
+
+
+def competing_tools() -> list[str]:
+    """Warnings about other running programs that will replace panescape's wallpaper."""
+    out = []
+    for name, (proc, check, advice) in WALLPAPER_TOOLS.items():
+        try:
+            if running(proc) and (check is None or check()):
+                out.append(f"{name} is running and will replace panescape's wallpaper: {advice}")
+        except Exception:  # noqa: BLE001 - a warning must never break applying
+            continue
+    return out
 
 
 @dataclass

@@ -685,6 +685,7 @@ class Project:
                     f.unlink()
         self.save_state({**state, "target": str(target), "applied": time.strftime("%Y-%m-%d %H:%M:%S")})
         _log(f"wallpaper set ({f'slideshow of {len(order)}' if slideshow else 'single image'}): {target}")
+        _warn_competitors()
         return target
 
     def _apply_per_output(self, backend, state: dict, dry_run: bool) -> Path | None:
@@ -707,6 +708,7 @@ class Project:
                      f"when you log in:\n{runner_command(self.root)}")
         else:
             _log(f"wallpaper set (single image): {Path(state['order'][0]).name}")
+        _warn_competitors()
         return target
 
     # ------------------------------------------------------------------ slideshow runner
@@ -871,6 +873,12 @@ class Project:
                 old.unlink()
         return (f"{time.strftime('%H:%M:%S')} calibration pattern applied for {cfg.name} "
                 f"({', '.join(f'{n}->{om.connector}' for n, om in pairing.items())})")
+
+
+def _warn_competitors() -> None:
+    from .backends.base import competing_tools
+    for w in competing_tools():
+        _log(f"  warning: {w}")
 
 
 def _raise_interrupt(*_args) -> None:
