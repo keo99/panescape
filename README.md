@@ -143,9 +143,11 @@ Searching needs a free key of your own: create an application at
 [unsplash.com/oauth/applications](https://unsplash.com/oauth/applications) and
 paste its **Access Key** (not the Secret key) into the tab. A new key allows 50
 requests an hour, and search results are cached for an hour to save them.
-Showing pictures doesn't count. Each download uses two requests: one to
-fetch the photo's tags, which search results don't include, and the
-download report Unsplash requires. The image file itself is free.
+Showing pictures doesn't count, and neither does the image file itself.
+A download uses one request for the download report Unsplash requires,
+plus one more with **Add Unsplash's tags** ticked, because search results
+don't include tags. Unticked, the picture is tagged from your search words
+and the photo's description instead.
 
 How panescape looks after the key:
 

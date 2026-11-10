@@ -10,10 +10,11 @@ from __future__ import annotations
 import html
 from pathlib import Path
 
-from PySide6.QtCore import QSize, Qt, Signal
+from PySide6.QtCore import QSettings, QSize, Qt, Signal
 from PySide6.QtGui import QIcon, QImage, QPixmap
 from PySide6.QtWidgets import (
     QAbstractItemView,
+    QCheckBox,
     QComboBox,
     QGroupBox,
     QHBoxLayout,
@@ -185,6 +186,15 @@ class UnsplashTab(QWidget):
         self.download_btn.setMinimumHeight(32)
         self.download_btn.clicked.connect(self.download)
         rl.addWidget(self.download_btn)
+        self.fetch_tags = QCheckBox("Add Unsplash's tags (1 extra request)")
+        self.fetch_tags.setToolTip(
+            "Search results don't include Unsplash's tags, so getting them costs one more request per "
+            "download.\nUnticked, the picture is tagged from your search words and the photo's description "
+            "instead.\nEither way a download uses one request for the report Unsplash requires; the image "
+            "file itself is free.")
+        self.fetch_tags.setChecked(_setting_bool("unsplash/fetch_tags", True))
+        self.fetch_tags.toggled.connect(lambda on: QSettings().setValue("unsplash/fetch_tags", on))
+        rl.addWidget(self.fetch_tags)
         self.after = QLabel()
         self.after.setWordWrap(True)
         rl.addWidget(self.after)
@@ -347,6 +357,8 @@ class UnsplashTab(QWidget):
             pid = str(ph.get("id") or "")
             if not pid or pid in self.photos:
                 continue
+            if self._query and not ph.get("_found_by"):
+                ph["_found_by"] = [self._query[0]]  # free tags if Unsplash's aren't fetched
             self.photos[pid] = ph
             name = (ph.get("user") or {}).get("name") or "?"
             it = QListWidgetItem(("✓ " if pid in have else "") + name)
@@ -448,14 +460,14 @@ class UnsplashTab(QWidget):
         ph = self.current_photo()
         if ph is None or self.client is None or self._busy:
             return
-        client, proj = self.client, self.project
+        client, proj, fetch = self.client, self.project, self.fetch_tags.isChecked()
         self._busy = True
         self.download_btn.setEnabled(False)
         self.download_btn.setText("Downloading…")
         name = (ph.get("user") or {}).get("name") or "?"
 
         def work():
-            path, full = client.download(ph, proj.pictures)
+            path, full = client.download(ph, proj.pictures, fetch_tags=fetch)
             tags = unsplash.save_download(proj, path, full)
             return path, tags
 
@@ -482,6 +494,11 @@ class UnsplashTab(QWidget):
             self._update_key_status()
             error(self, "Download", err)
         run_async(work, done, failed)
+
+
+def _setting_bool(key: str, default: bool) -> bool:
+    v = QSettings().value(key, default)
+    return v if isinstance(v, bool) else str(v).lower() in ("true", "1")
 
 
 def credit_html(project: Project, name: str) -> str:

@@ -257,3 +257,16 @@ def test_enlargement():
     from panescape.layout import compute_layout
     lay = compute_layout(configuration_from_dict(DESK))
     assert unsplash.enlargement(12000, 4000, lay) < 1 < unsplash.enlargement(3000, 1000, lay)
+
+
+def test_download_with_one_request(env):
+    proj = make_project(env, names=("a",))
+    net = FakeNet()
+    net.routes["https://api.unsplash.com/photos/ccccccccccc/download"] = {}
+    net.routes["https://images.unsplash.com/"] = jpeg_bytes()
+    found = dict(photo("ccccccccccc"), tags=None, alt_description="Snowy peaks above a quiet lake at dawn",
+                 _found_by=["alpine lake"])
+    path, ph = unsplash.Client(KEY, opener=net).download(found, proj.pictures, fetch_tags=False)
+    api = [u for u, _ in net.sent if u.startswith("https://api.unsplash.com/")]
+    assert len(api) == 1 and "/download" in api[0]
+    assert unsplash.save_download(proj, path, ph) == ["alpine", "lake", "snowy", "peaks", "quiet", "dawn"]

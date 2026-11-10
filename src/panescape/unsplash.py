@@ -313,9 +313,13 @@ class Client:
             loc = self._url(f"/photos/{photo['id']}/download")
         self._get(loc, cache=False)
 
-    def download(self, photo: dict, dest_dir: Path) -> tuple[Path, dict]:
-        """Save the photo into dest_dir (not overwriting); returns (path, full photo)."""
-        full = self.photo(photo["id"])
+    def download(self, photo: dict, dest_dir: Path, fetch_tags: bool = True) -> tuple[Path, dict]:
+        """Save the photo into dest_dir (not overwriting); returns (path, photo).
+
+        Costs one API request (the download report Unsplash requires), plus one to
+        fetch the photo's own tags if ``fetch_tags`` (search results don't have them).
+        The image file itself comes from images.unsplash.com and is free."""
+        full = self.photo(photo["id"]) if fetch_tags else photo
         raw = (full.get("urls") or {}).get("raw") or (photo.get("urls") or {}).get("raw")
         if not raw:
             raise UnsplashError("this photo has no download address")
@@ -398,6 +402,32 @@ def clean_tags(photo: dict, limit: int = 8) -> list[str]:
     return out
 
 
+STOPWORDS = set("""a an the and or of in on at to with without for from by over under near into onto
+    is are was were be been being this that these those its it his her their our your my some many few
+    two three one four five several group view top close up side front back during while very
+    above below behind beside around between against across through along amid among beneath next
+    photo photography image picture shot taken person people man woman""".split())
+
+
+def derived_tags(photo: dict, limit: int = 8) -> list[str]:
+    """Tags without an extra request: the words you searched for (or the tags a
+    suggestion came from) and the photo's description."""
+    out: list[str] = []
+
+    def add(word: str) -> None:
+        w = word.strip().lower()
+        if (len(w) >= 3 and w.isalpha() and w not in STOPWORDS and w not in GENERIC_TAGS
+                and w not in GENERIC_WORDS and w not in out and len(out) < limit):
+            out.append(w)
+    for q in photo.get("_found_by") or []:
+        for w in re.split(r"[\s,+]+", str(q)):
+            add(w)
+    text = " ".join(str(photo.get(k) or "") for k in ("alt_description", "description"))
+    for w in re.findall(r"[A-Za-z]+", text):
+        add(w)
+    return out
+
+
 def credits_file(project) -> Path:
     return project.pictures / "credits.yml"
 
@@ -438,7 +468,7 @@ def save_download(project, path: Path, photo: dict) -> list[str]:
         entry["about"] = str(photo.get("description") or photo.get("alt_description"))[:200]
     doc[path.name] = entry
     yamledit.save(cf, doc)
-    tags = clean_tags(photo)
+    tags = clean_tags(photo) or derived_tags(photo)
     if tags:
         edit_tags(project.tags_file, {path.name: (set(tags), set())})
     return tags
@@ -483,7 +513,7 @@ def suggest(client: Client, project, n_tags: int = 3, extra: list[str] | None = 
             pid = ph.get("id")
             if not pid or pid in have:
                 continue
-            seen.setdefault(pid, ph)
+            seen.setdefault(pid, ph).setdefault("_found_by", []).append(t)
             score[pid] += 1
             rank[pid] = min(rank.get(pid, 1e9), i)
     order = sorted(seen, key=lambda pid: (-score[pid], rank[pid]))

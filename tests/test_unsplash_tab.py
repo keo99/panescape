@@ -32,8 +32,9 @@ class FakeClient:
         res = [photo(f"{q[:4]:_<4}{page}{i:06d}", name=f"Pho Tographer{i}", tags=("lake",)) for i in range(3)]
         return {"total": 6, "total_pages": 2, "results": res}
 
-    def download(self, ph, dest):
-        full = dict(ph, tags=[{"title": "lake"}, {"title": "HD wallpapers"}, {"title": "dawn"}])
+    def download(self, ph, dest, fetch_tags=True):
+        self.fetched_tags = fetch_tags
+        full = dict(ph, tags=[{"title": "lake"}, {"title": "HD wallpapers"}, {"title": "dawn"}] if fetch_tags else [])
         path = dest / unsplash.file_name(full)
         path.write_bytes(jpeg_bytes(400, 200))
         return path, full
@@ -143,3 +144,17 @@ def test_remove_key(tab):
     tab.load_key()
     tab.forget_key()
     assert unsplash.load_key() == (None, None) and tab.key_box.isVisibleTo(tab)
+
+
+def test_download_without_unsplash_tags(tab):
+    unsplash.save_key(KEY)
+    tab.load_key()
+    tab.query.setText("misty fjord")
+    tab.search()
+    tab.settle()
+    tab.grid.setCurrentRow(0)
+    tab.fetch_tags.setChecked(False)
+    tab.download()
+    tab.settle()
+    assert tab.client.fetched_tags is False
+    assert "misty, fjord, lake" in tab.after.text()  # search words, then the description ("a lake")
