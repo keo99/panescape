@@ -155,6 +155,10 @@ class PicturesTab(QWidget):
         f.setBold(True)
         self.title.setFont(f)
         pl.addWidget(self.title)
+        self.credit = QLabel()
+        self.credit.setOpenExternalLinks(True)
+        self.credit.setTextFormat(Qt.RichText)
+        pl.addWidget(self.credit)
         self.chips_box = QWidget()
         self.chips = FlowLayout(self.chips_box)
         pl.addWidget(self.chips_box)
@@ -460,6 +464,9 @@ class PicturesTab(QWidget):
             self.title.setText(names[0])
         else:
             self.title.setText(f"{len(names)} pictures selected")
+        from .unsplash_tab import credit_html
+        self.credit.setText(credit_html(self.project, names[0]) if len(names) == 1 else "")
+        self.credit.setVisible(bool(self.credit.text()))
         counts: dict[str, int] = {}
         sources: dict[str, set[str]] = {}
         for n in names:

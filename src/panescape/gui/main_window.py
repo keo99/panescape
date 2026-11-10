@@ -74,6 +74,11 @@ class MainWindow(QMainWindow):
         self.apply_tab.message.connect(lambda m: self.statusBar().showMessage(m, 8000))
         self.apply_tab.setup_edited.connect(self._setup_edited_here)
         self.tabs.addTab(self.apply_tab, "Apply")
+        from .unsplash_tab import UnsplashTab
+        self.unsplash_tab = UnsplashTab(project)
+        self.unsplash_tab.message.connect(lambda m: self.statusBar().showMessage(m, 8000))
+        self.unsplash_tab.downloaded.connect(self._downloaded)
+        self.tabs.addTab(self.unsplash_tab, "Unsplash")
         self.tabs.currentChanged.connect(self._tab_changed)
         root.addWidget(self.tabs, 1)
         self.setCentralWidget(central)
@@ -198,9 +203,15 @@ class MainWindow(QMainWindow):
         self.layout_editor._update_used_by()
         self.pictures_tab.refresh_layout()
 
+    def _downloaded(self, _path: str) -> None:
+        self.pictures_tab.refresh()
+        self.apply_tab.update_preview()
+
     def _tab_changed(self, _i) -> None:
         if self.tabs.currentWidget() is self.pictures_tab:
             self.pictures_tab.refresh_layout()  # the layout may have been edited / saved
+        elif self.tabs.currentWidget() is self.unsplash_tab:
+            self.unsplash_tab.refresh_layout()  # for the sharpness note
         elif self.tabs.currentWidget() is self.apply_tab:
             self.apply_tab.refresh(force=False)
             self.apply_tab.update_preview()  # tags / pictures may have changed

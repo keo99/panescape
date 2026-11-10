@@ -124,12 +124,52 @@ The **Apply** tab:
   when your config already has it. It also lets you choose the wallpaper tool
   (`setter`).
 
-An Unsplash tab is on the way.
+The **Unsplash** tab finds new pictures:
+
+- **Search** Unsplash (landscape photos by default, since they suit a wide
+  desk), or press **Suggest for me** for photos like the ones you have, based
+  on your most used tags. Photos you already have are left out of the
+  suggestions.
+- **Choose a photo** to see it larger, with its photographer and a note on
+  whether it's sharp enough for your desk.
+- **Download to my pictures** saves it into `pictures/` (named like
+  `ann-lee-Zx3abcDEF12-unsplash.jpg`). The photo's Unsplash tags are added,
+  minus generic ones like "hd wallpapers", and the credit goes in
+  `pictures/credits.yml`. The Pictures tab then shows "Photo by … on Unsplash".
+
+### Your Unsplash access key
+
+Searching needs a free key of your own: create an application at
+[unsplash.com/oauth/applications](https://unsplash.com/oauth/applications) and
+paste its **Access Key** (not the Secret key) into the tab. A new key allows 50
+requests an hour, and search results are cached for an hour to save them.
+Showing and downloading pictures doesn't count.
+
+How panescape looks after the key:
+
+- **Checked before it's saved:** panescape makes one request with the key
+  first, and stores it only if Unsplash accepts it.
+- **Where it's stored:** in your system keyring (GNOME Keyring, KWallet, …)
+  if you have one; otherwise in `~/.config/panescape/unsplash-key`, which
+  only you can read. The environment variable `PANESCAPE_UNSPLASH_KEY`, if
+  set, takes precedence.
+- **Where it never goes:** your project folder, `setup.yml`, the window's
+  settings or the cache. The window never shows it again after you save it.
+- **Who receives it:** only `https://api.unsplash.com`, in a request header,
+  never in a web address. panescape refuses redirects to anywhere else and
+  removes the key from any error message.
+- **Removing it:** **Remove key** deletes it from the keyring and from the
+  file.
+
+Following Unsplash's API guidelines, pictures are shown straight from
+Unsplash's own links (never copied into a cache), every download is reported
+to Unsplash so the photographer gets credit, and photographers and Unsplash
+are credited with links.
 
 ## How a project folder looks
 
 ```
-pictures/                     your source images (+ tags.yml, crops.yml)
+pictures/                     your source images (+ tags.yml, crops.yml, credits.yml)
 configurations/my_desk.yml    physical description of a monitor setup
 setup.yml                     what `panescape apply` puts on the desktop
 backgrounds/<config>/<image>/
