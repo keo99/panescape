@@ -17,7 +17,7 @@ classifiers = [
   "Programming Language :: Python :: 3",
   "Topic :: Desktop Environment",
 ]
-dependencies = ["Pillow>=10.1", "PyYAML>=6"]
+dependencies = ["Pillow>=10.1", "PyYAML>=6", "ruamel.yaml>=0.18"]
 
 [project.urls]
 Homepage = "https://github.com/keo99/panescape"

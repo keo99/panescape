@@ -78,7 +78,7 @@ def match_monitors(config_monitors, os_layout: OsLayout, centres: dict | None = 
             hit = [om for om in remaining if all(
                 str(getattr(om, k, "")).lower() == str(v).lower() for k, v in cm.match.items())]
             if not hit:
-                raise BackendError(f"monitor {cm.name!r}: nothing in GNOME matches {cm.match}")
+                raise BackendError(f"monitor {cm.name!r}: no monitor on the desktop matches {cm.match}")
             result[cm.name] = hit[0]
             remaining.remove(hit[0])
         else:
@@ -86,7 +86,7 @@ def match_monitors(config_monitors, os_layout: OsLayout, centres: dict | None = 
     if not pending:
         return result
     if len(remaining) < len(pending):
-        raise BackendError(f"configuration has {len(config_monitors)} monitors but GNOME has "
+        raise BackendError(f"configuration has {len(config_monitors)} monitors but the desktop has "
                            f"{len(os_layout.monitors)} active; add connector/serial keys or fix the layout")
     builtin_free = [om for om in remaining if not om.builtin]
     pool = builtin_free if len(builtin_free) >= len(pending) else remaining

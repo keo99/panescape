@@ -12,3 +12,5 @@ interval: 15m                   # slideshow: time per image (s, m, h)
 transition: 2s                  # slideshow: cross-fade length
 shuffle: false
 # setter: swww                  # sway/Hyprland only: sway | hyprpaper | swww | swaybg (default: first that works)
+# Want several setups (work, evening, ...) to switch between? See "Several setups"
+# in the README, or use the Setup menu in panescape-gui.
