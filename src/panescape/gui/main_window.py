@@ -69,6 +69,11 @@ class MainWindow(QMainWindow):
         self.pictures_tab = PicturesTab(project, self.layout_editor.backend)
         self.pictures_tab.message.connect(lambda m: self.statusBar().showMessage(m, 8000))
         self.tabs.addTab(self.pictures_tab, "Pictures && tags")
+        from .apply_tab import ApplyTab
+        self.apply_tab = ApplyTab(project, self.layout_editor.backend, self.layout_editor.drop_calibration)
+        self.apply_tab.message.connect(lambda m: self.statusBar().showMessage(m, 8000))
+        self.apply_tab.setup_edited.connect(self._setup_edited_here)
+        self.tabs.addTab(self.apply_tab, "Apply")
         self.tabs.currentChanged.connect(self._tab_changed)
         root.addWidget(self.tabs, 1)
         self.setCentralWidget(central)
@@ -117,6 +122,7 @@ class MainWindow(QMainWindow):
         self.layout_editor._update_used_by()
         self.pictures_tab.refresh_layout()
         self.pictures_tab.apply_filter()
+        self.apply_tab.refresh()
         self.statusBar().showMessage(f"active setup: {name} (applied the next time you press Apply "
                                      f"or run 'panescape apply')", 8000)
 
@@ -131,6 +137,7 @@ class MainWindow(QMainWindow):
             error(self, "Setup", str(e))
         self.refresh_setups()
         self.layout_editor._update_used_by()
+        self.apply_tab.refresh(force=False)
 
     def new_setup(self) -> None:
         name, ok = QInputDialog.getText(self, "New setup",
@@ -181,10 +188,23 @@ class MainWindow(QMainWindow):
         self._watch_setup()  # re-arm after an atomic replace
         self.refresh_setups()
         self.layout_editor._update_used_by()
+        self.apply_tab.refresh(force=False)
+
+    def _setup_edited_here(self) -> None:
+        """The Apply tab changed the active setup (e.g. its layout)."""
+        cfg = self._setup_config()
+        if cfg and self.layout_editor.name != Path(str(cfg)).stem and self.layout_editor.maybe_save():
+            self.layout_editor.show_config(cfg)
+        self.layout_editor._update_used_by()
+        self.pictures_tab.refresh_layout()
 
     def _tab_changed(self, _i) -> None:
         if self.tabs.currentWidget() is self.pictures_tab:
             self.pictures_tab.refresh_layout()  # the layout may have been edited / saved
+        elif self.tabs.currentWidget() is self.apply_tab:
+            self.apply_tab.refresh(force=False)
+            self.apply_tab.update_preview()  # tags / pictures may have changed
+            self.apply_tab.refresh_runner()
 
     # ------------------------------------------------------------------ closing
     def closeEvent(self, event):

@@ -1161,6 +1161,17 @@ class LayoutEditor(QWidget):
         run_async(lambda: proj.end_calibration(be), lambda m: self.message.emit(m or "calibration off"),
                   lambda e: error(self, "Calibrate", e))
 
+    def drop_calibration(self) -> bool:
+        """Something else is about to replace the pattern (Apply): switch the toggle off
+        without restoring the old wallpaper. False if a pattern update is still running."""
+        if self._calib_busy:
+            return False
+        if self.calib.isChecked():
+            self.calib.blockSignals(True)
+            self.calib.setChecked(False)
+            self.calib.blockSignals(False)
+        return True
+
     def stop_calibration_now(self) -> None:
         """On quit: put the wallpaper back before the window goes."""
         if self.project.calibrating() and self.backend() is not None:

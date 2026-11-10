@@ -8,6 +8,7 @@ import json
 import os
 import random
 import time
+from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -69,8 +70,23 @@ class Rendered:
     mapping: Mapping | None = None   # decoded source, kept only while rendering
 
 
+_log_sinks: list = []  # extra receivers of progress messages (the window's log)
+
+
 def _log(msg: str) -> None:
     print(msg, flush=True)
+    for sink in list(_log_sinks):
+        sink(msg)
+
+
+@contextmanager
+def capture_log(sink):
+    """Also send progress messages to ``sink(msg)`` while the block runs."""
+    _log_sinks.append(sink)
+    try:
+        yield
+    finally:
+        _log_sinks.remove(sink)
 
 
 class Project:
@@ -212,6 +228,27 @@ class Project:
             else:
                 entry[k] = v
         self._save_setup_rt(doc)
+
+    def update_shared(self, values: dict) -> None:
+        """Set keys shared by every setup (e.g. setter); None removes the key."""
+        doc = self._setup_rt()
+        if list(doc["setups"]) == [DEFAULT_SETUP] and set(doc) <= {"active", "setups"}:
+            self.update_setup(values)  # one setup: keep setup.yml in its simple form
+            return
+        for k, v in values.items():
+            if v is None:
+                doc.pop(k, None)
+            else:
+                doc[k] = v
+            for entry in doc["setups"].values():  # a setup's own value would win; drop it
+                if entry is not None:
+                    entry.pop(k, None)
+        self._save_setup_rt(doc)
+
+    def applied_setup(self, state: dict | None = None) -> tuple[str | None, dict | None]:
+        """(setup name, its settings) as they were when the wallpaper on screen was applied."""
+        state = self.load_state() if state is None else state
+        return state.get("setup"), state.get("setup_values")
 
     # ------------------------------------------------------------------ configurations
     def config_names(self) -> list[str]:
@@ -717,7 +754,7 @@ class Project:
                          and _is_current(backend, old.get("target", "")))
             if unchanged and not force:
                 _log("wallpaper already up to date")
-                self.save_state({**old, "rule": rule, "pinned": pinned})
+                self.save_state({**old, "rule": rule, "pinned": pinned, **self._setup_info(rule)})
                 return None
 
         start = time.time()
@@ -728,7 +765,7 @@ class Project:
             "rule": rule, "pinned": pinned,
             "order": order, "composites": [comp[o] for o in order],
             "interval": interval, "transition": transition, "interval_s": secs, "transition_s": trans,
-            "shuffle": shuffle, "start": start,
+            "shuffle": shuffle, "start": start, **self._setup_info(rule),
         }
         if per_output:
             return self._apply_per_output(backend, state, dry_run)
@@ -754,6 +791,16 @@ class Project:
         _log(f"wallpaper set ({f'slideshow of {len(order)}' if slideshow else 'single image'}): {target}")
         _warn_competitors()
         return target
+
+    def _setup_info(self, rule: dict) -> dict:
+        """Which setup (and its settings) a setup rule followed, so the window can tell
+        whether setup.yml has changed since."""
+        if rule.get("source") != "setup":
+            return {"setup": None, "setup_values": None}
+        try:
+            return {"setup": self.active_setup(), "setup_values": json.loads(json.dumps(self.load_setup()))}
+        except (ProjectError, TypeError, ValueError):
+            return {"setup": None, "setup_values": None}
 
     def _apply_per_output(self, backend, state: dict, dry_run: bool) -> Path | None:
         """sway / Hyprland: show the current frame now; a slideshow runner does the rest."""

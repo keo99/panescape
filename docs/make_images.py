@@ -182,6 +182,27 @@ def gui_screenshot(picture: Path) -> None:
         tab.items["triglav.jpg"].setSelected(True)
         settle()
         win.grab().save(str(OUT / "gui-pictures.png"))
+
+        # Apply tab: pretend a slideshow from this setup is on a GNOME desktop (no real desktop is touched)
+        import json
+        import time
+
+        from panescape.backends import gnome
+        proj = win.project
+        proj.update_setup({"filter": "mountains", "interval": "15m", "transition": "2s"})
+        jobs = proj.evaluate_rule({"source": "setup"})["jobs"]
+        proj.backgrounds.mkdir(exist_ok=True)
+        proj.state_path().write_text(json.dumps({
+            "mode": "slideshow", "kind": "spanned", "configuration": str(proj.config_path("my_desk")),
+            "rule": {"source": "setup"}, "order": [str(j.source) for j in jobs], "interval_s": 900,
+            "transition_s": 2, "start": time.time() - 900 - 312, "applied": time.strftime("%Y-%m-%d %H:%M"),
+            "setup": "default", "setup_values": proj.load_setup()}))
+        ed._backend, ed._backend_checked = gnome, True
+        win.tabs.setCurrentWidget(win.apply_tab)
+        win.apply_tab.refresh()
+        win.apply_tab.refresh_runner()
+        settle()
+        win.grab().save(str(OUT / "gui-apply.png"))
         win.close()
 
 

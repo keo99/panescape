@@ -105,7 +105,26 @@ The **Pictures & tags** tab:
 If a panescape wallpaper is on the desktop, it updates a couple of seconds
 after a change.
 
-More tabs (applying, Unsplash) are on the way.
+![The apply tab](docs/images/gui-apply.png)
+
+The **Apply** tab:
+
+- **Edit the active setup:** its layout, all pictures or a chosen list
+  (names or patterns like `city-*`), the tag filter, one picture or a
+  slideshow, how long each picture stays, the cross-fade and shuffling. Each
+  change is saved to `setup.yml` straight away, with your comments kept.
+- **Check the selection:** the tab shows which pictures the setup picks and how
+  long a full round of the slideshow takes.
+- **Apply to the desktop** puts it on your screens. **Details** shows the log.
+- **On the desktop now:** the picture showing, what comes next and when, and
+  a note when the setup has changed since it was applied.
+- **Slideshow runner** (sway, Hyprland, KDE): see whether it's running, start
+  or stop it, and have it start when you log in. On sway and Hyprland the tab
+  gives you the line to add to your config, with a Copy button, and notices
+  when your config already has it. It also lets you choose the wallpaper tool
+  (`setter`).
+
+An Unsplash tab is on the way.
 
 ## How a project folder looks
 
