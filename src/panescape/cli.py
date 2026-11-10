@@ -214,22 +214,24 @@ def cmd_sync(args) -> None:
 
 
 def cmd_tag(args) -> None:
-    from .tags import load_tags, norm_tag, save_tags
+    from .tags import edit_tags, load_tags, norm_tag, tags_for
     proj = _project(args)
     if not (args.add or args.remove or args.clear):
         raise ProjectError("nothing to do: use -a TAG, -r TAG or --clear")
     tags = load_tags(proj.tags_file)
+    changes = {}
     for job in proj.resolve_images(args.images):
         name = job.source.name
         if job.source.parent.resolve() != proj.pictures.resolve():
             raise ProjectError(f"{name}: only images in {proj.pictures} can be tagged")
-        cur = set() if args.clear else set(tags.get(name, set()))
-        cur |= {norm_tag(t) for t in args.add or []}
-        cur -= {norm_tag(t) for t in args.remove or []}
-        tags[name] = cur
-        print(f"{name}: {', '.join(sorted(cur)) or '(no tags)'}")
+        remove = set(tags.get(name, set())) if args.clear else set()
+        changes[name] = ({norm_tag(t) for t in args.add or []}, remove | {norm_tag(t) for t in args.remove or []})
     proj.pictures.mkdir(parents=True, exist_ok=True)
-    save_tags(proj.tags_file, tags)
+    for w in edit_tags(proj.tags_file, changes):
+        print(f"note: {w}")
+    tags = load_tags(proj.tags_file)
+    for name in changes:
+        print(f"{name}: {', '.join(sorted(tags_for(name, tags))) or '(no tags)'}")
     be = backends.detect()
     if args.no_sync or not proj.load_state() or be is None:
         return

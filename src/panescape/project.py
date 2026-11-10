@@ -363,8 +363,73 @@ class Project:
 
     # ------------------------------------------------------------------ render
     def crop_for(self, cfg: Configuration, job: ImageJob, override: dict | None = None) -> CropSpec:
+        """Configuration < setup.yml crop < pictures/crops.yml < setup.yml image entry < command line."""
         setup_crop = self.load_setup().get("crop")
-        return CropSpec.from_dicts(cfg.crop, setup_crop, job.crop, override)
+        own = self.picture_crops().get(job.source.name) if job.source.parent == self.pictures else None
+        return CropSpec.from_dicts(cfg.crop, setup_crop, own, job.crop, override)
+
+    # ------------------------------------------------------------------ pictures
+    @property
+    def crops_file(self) -> Path:
+        return self.pictures / "crops.yml"
+
+    def picture_crops(self) -> dict[str, dict]:
+        """Per-picture crop settings (pictures/crops.yml): {file name: {anchor, zoom, fit}}."""
+        try:
+            mtime = self.crops_file.stat().st_mtime_ns
+        except FileNotFoundError:
+            return {}
+        if getattr(self, "_crops_cache", (None,))[0] != mtime:
+            with open(self.crops_file) as f:
+                raw = yaml.safe_load(f) or {}
+            if not isinstance(raw, dict):
+                raise ProjectError(f"{self.crops_file} must map picture names to crop settings")
+            self._crops_cache = (mtime, {str(k): dict(v or {}) for k, v in raw.items()})
+        return self._crops_cache[1]
+
+    def set_picture_crop(self, name: str, crop: dict | None) -> None:
+        """Save (or with None / {} remove) a picture's crop settings, keeping comments."""
+        from ruamel.yaml.comments import CommentedMap, CommentedSeq
+
+        from . import yamledit
+        doc = yamledit.load(self.crops_file)
+        if not doc and not self.crops_file.exists():
+            doc.yaml_set_start_comment(
+                "How each picture is framed on the desk (any setup). Set by panescape-gui or by hand:\n"
+                "  anchor: [x, y] 0..1 (or center, top, left, ...)   zoom: >1 crops tighter\n"
+                "  fit: cover (fill, crop edges) | contain (whole picture, bars)")
+        crop = {k: v for k, v in (crop or {}).items() if v is not None}
+        if crop:
+            entry = CommentedMap()
+            for k, v in crop.items():
+                if isinstance(v, (list, tuple)):
+                    v = CommentedSeq([round(float(x), 4) for x in v])
+                    v.fa.set_flow_style()
+                entry[k] = v
+            entry.fa.set_flow_style()
+            doc[name] = entry
+        else:
+            doc.pop(name, None)
+        yamledit.save(self.crops_file, doc)
+
+    def import_pictures(self, paths) -> list[Path]:
+        """Copy images into pictures/ (never overwriting); returns the new files."""
+        import shutil
+        self.pictures.mkdir(parents=True, exist_ok=True)
+        out = []
+        for src in map(Path, paths):
+            if src.suffix.lower() not in IMAGE_EXTS or not src.is_file():
+                continue
+            if src.resolve().parent == self.pictures.resolve():
+                continue
+            dst = self.pictures / src.name
+            n = 2
+            while dst.exists():
+                dst = self.pictures / f"{src.stem}-{n}{src.suffix}"
+                n += 1
+            shutil.copy2(src, dst)
+            out.append(dst)
+        return out
 
     @staticmethod
     def _hash(data) -> str:
@@ -617,7 +682,9 @@ class Project:
         # comp[source]: GNOME: path of the combined image; per-output: {output: slice path}
         comp: dict = {}
         renders = self.render_many(cfg, jobs, force=force, then=None if per_output else build)
+        rerendered = False  # slices keep their file names, so a re-render is a change too
         for job, (r, path) in zip(jobs, renders, strict=True):
+            rerendered |= not r.skipped
             rel = r.out_dir.relative_to(self.root) if r.out_dir.is_relative_to(self.root) else r.out_dir
             _log(f"{'cached ' if r.skipped else 'rendered'} {job.source.name} -> {rel}")
             for w in r.warnings:
@@ -643,7 +710,7 @@ class Project:
                 _log(f"  + {Path(o).name}")
             for o in sorted(before - after):
                 _log(f"  - {Path(o).name}")
-            unchanged = (old.get("mode") == mode and old.get("order") == order
+            unchanged = (not rerendered and old.get("mode") == mode and old.get("order") == order
                          and old.get("composites") == [comp[o] for o in order]
                          and old.get("interval_s") == secs and old.get("transition_s") == trans
                          and Path(old.get("target", "")).exists()

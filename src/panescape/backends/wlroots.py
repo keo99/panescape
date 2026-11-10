@@ -32,6 +32,8 @@ from .base import (  # noqa: F401 - match_monitors is part of the backend interf
     OsMonitor,
     match_monitors,
     native_size,
+    prune_links,
+    unique_link,
 )
 from .base import running as _running
 
@@ -166,6 +168,9 @@ def set_outputs(outputs: dict[str, Path], transition: float = 0.0, setter: str |
         cmd = "; ".join(f"output {shlex.quote(n)} bg {shlex.quote(str(p))} fill {color}" for n, p in outputs.items())
         _run(["swaymsg", cmd])
     elif tool == "hyprpaper":
+        # hyprpaper keeps loaded images by path: a re-rendered slice needs a new name
+        outputs = {n: unique_link(p, "hyprpaper").absolute() for n, p in outputs.items()}
+        prune_links("hyprpaper", set(outputs.values()))
         for n, p in outputs.items():
             out = _run(["hyprctl", "hyprpaper", "wallpaper", f"{n}, {p}, cover"], check=False)
             if out.returncode != 0 or "not preloaded" in out.stdout.lower():  # hyprpaper < 0.8

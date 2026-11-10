@@ -28,8 +28,11 @@ from .base import (  # noqa: F401 - part of the backend interface
     BackendError,
     OsLayout,
     OsMonitor,
+    link_dir,
     match_monitors,
     native_size,
+    prune_links,
+    unique_link,
 )
 
 KIND = "per_output"
@@ -143,22 +146,11 @@ def screen_for(om: OsMonitor, screens: list[dict]) -> int | None:
 
 
 def _cache_dir() -> Path:
-    base = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
-    return base / "panescape" / "kde"
+    return link_dir("kde")
 
 
 def _unique_link(path: Path) -> Path:
-    """A link whose name changes whenever the file changes, so Plasma reloads it."""
-    st = path.stat()
-    d = _cache_dir()
-    d.mkdir(parents=True, exist_ok=True)
-    link = d / f"{path.parent.name}-{path.stem}-{st.st_mtime_ns:x}-{st.st_size:x}{path.suffix}"
-    if not link.exists():
-        try:
-            link.symlink_to(path)
-        except OSError:
-            shutil.copy2(path, link)
-    return link
+    return unique_link(path, "kde")
 
 
 def set_script(by_screen: dict[int, Path], fill_mode: int = FILL_PRESERVE_ASPECT_CROP) -> str:
@@ -196,9 +188,4 @@ def set_outputs(outputs: dict[str, Path], transition: float = 0.0, setter: str |
 
 
 def _prune_links(keep: set[Path], max_links: int = 64) -> None:
-    """Drop old links, keeping the newest few (a slideshow cycles through them)."""
-    d = _cache_dir()
-    links = sorted(d.iterdir(), key=lambda p: p.lstat().st_mtime, reverse=True)
-    for old in links[max_links:]:
-        if old not in keep:
-            old.unlink(missing_ok=True)
+    prune_links("kde", keep, max_links)

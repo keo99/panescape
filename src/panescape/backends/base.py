@@ -19,6 +19,38 @@ class BackendError(RuntimeError):
     pass
 
 
+def link_dir(kind: str) -> Path:
+    base = Path(os.environ.get("XDG_CACHE_HOME") or Path.home() / ".cache")
+    return base / "panescape" / kind
+
+
+def unique_link(path: Path, kind: str) -> Path:
+    """A link whose name changes whenever the file changes, for wallpaper tools that
+    cache images by path (Plasma, hyprpaper)."""
+    import shutil
+    st = path.stat()
+    d = link_dir(kind)
+    d.mkdir(parents=True, exist_ok=True)
+    link = d / f"{path.parent.name}-{path.stem}-{st.st_mtime_ns:x}-{st.st_size:x}{path.suffix}"
+    if not link.exists():
+        try:
+            link.symlink_to(path)
+        except OSError:
+            shutil.copy2(path, link)
+    return link
+
+
+def prune_links(kind: str, keep: set[Path], max_links: int = 64) -> None:
+    """Drop old links, keeping the newest few (a slideshow cycles through them)."""
+    d = link_dir(kind)
+    if not d.is_dir():
+        return
+    links = sorted(d.iterdir(), key=lambda p: p.lstat().st_mtime, reverse=True)
+    for old in links[max_links:]:
+        if old not in keep:
+            old.unlink(missing_ok=True)
+
+
 def running(name: str) -> bool:
     """Is a process with this name running for this user? (/proc, no psutil needed)"""
     proc = Path("/proc")

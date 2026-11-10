@@ -62,14 +62,24 @@ def recorder(monkeypatch):
 
 def test_setters(recorder, monkeypatch, tmp_path):
     out = {"DP-6": tmp_path / "1 left.png", "DP-8": tmp_path / "2_centre.png"}
+    for p in out.values():
+        p.write_bytes(b"png")
+    monkeypatch.setenv("XDG_CACHE_HOME", str(tmp_path / "cache"))
     wlroots.set_outputs(out, setter="sway")
     assert recorder[-1][0] == "swaymsg"
     assert f"output DP-6 bg '{tmp_path / '1 left.png'}' fill #000000" in recorder[-1][1]   # quoted path
 
     recorder.clear()
     wlroots.set_outputs(out, setter="hyprpaper")
-    assert recorder == [["hyprctl", "hyprpaper", "wallpaper", f"DP-6, {out['DP-6']}, cover"],
-                        ["hyprctl", "hyprpaper", "wallpaper", f"DP-8, {out['DP-8']}, cover"]]
+    assert [c[:3] for c in recorder] == [["hyprctl", "hyprpaper", "wallpaper"]] * 2
+    first = recorder[0][3]
+    assert first.startswith("DP-6, ") and first.endswith(", cover") and "/cache/panescape/hyprpaper/" in first
+    # hyprpaper caches by path: a re-rendered file gets a new name
+    recorder.clear()
+    import os
+    os.utime(out["DP-6"], ns=(1, 1))
+    wlroots.set_outputs(out, setter="hyprpaper")
+    assert recorder[0][3] != first
 
     recorder.clear()
     wlroots.set_outputs(out, setter="swww", transition=1.5)

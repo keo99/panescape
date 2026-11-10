@@ -129,3 +129,95 @@ def compile_filter(expr: str):
     if pos != len(tokens):
         raise FilterError(f"unexpected {tokens[pos]!r} in filter {expr!r}")
     return pred, terms
+
+
+# --------------------------------------------------------------------------- editing
+# These keep tags.yml's comments and order (ruamel round-trip); new entries
+# are added at the end as one-line lists.
+
+TAGS_HEADER = ("Image tags for panescape. Keys are file names in this folder (globs allowed).\n"
+               "Filter in setup.yml with e.g.  filter: landscape + water + !mountains\n")
+
+
+def _load_rt(path: Path):
+    from . import yamledit
+    doc = yamledit.load(path)
+    if not doc and not path.exists():
+        doc.yaml_set_start_comment(TAGS_HEADER)
+    return doc
+
+
+def _tag_list(tags):
+    from ruamel.yaml.comments import CommentedSeq
+    seq = CommentedSeq(sorted(tags))
+    seq.fa.set_flow_style()
+    return seq
+
+
+def _entry_tags(value) -> set[str]:
+    if isinstance(value, str):
+        return {norm_tag(t) for t in re.split(r"[,\s]+", value) if t}
+    return {norm_tag(t) for t in (value or [])}
+
+
+def edit_tags(path: Path, changes: dict[str, tuple[set[str], set[str]]]) -> list[str]:
+    """Add / remove tags on images: ``{file name: (add, remove)}``.
+
+    Returns warnings for tags that can't be removed from an image because a
+    glob entry (e.g. ``"city-*"``) gives them to it.
+    """
+    from . import yamledit
+    doc = _load_rt(path)
+    warnings = []
+    for name, (add, remove) in changes.items():
+        add = {norm_tag(t) for t in add if norm_tag(t)}
+        remove = {norm_tag(t) for t in remove}
+        cur = _entry_tags(doc.get(name))
+        new = (cur | add) - remove
+        if new != cur or (name in doc and not new):
+            if new:
+                doc[name] = _tag_list(new)
+            else:
+                doc.pop(name, None)
+        for key, value in doc.items():
+            if key != name and (fnmatch.fnmatch(name, str(key)) or key == Path(name).stem):
+                stuck = _entry_tags(value) & remove
+                if stuck:
+                    warnings.append(f"{name}: {', '.join(sorted(stuck))} come(s) from the entry {key!r} "
+                                    f"in {path.name}; edit that entry to change it")
+    yamledit.save(path, doc)
+    return warnings
+
+
+def rename_tag(path: Path, old: str, new: str) -> int:
+    """Rename (or, if ``new`` exists, merge into) a tag everywhere. Returns entries changed."""
+    from . import yamledit
+    old, new = norm_tag(old), norm_tag(new)
+    doc = _load_rt(path)
+    n = 0
+    for key in list(doc.keys()):
+        tags = _entry_tags(doc[key])
+        if old in tags:
+            doc[key] = _tag_list((tags - {old}) | ({new} if new else set()))
+            if not doc[key]:
+                del doc[key]
+            n += 1
+    if n:
+        yamledit.save(path, doc)
+    return n
+
+
+def delete_tag(path: Path, tag: str) -> int:
+    return rename_tag(path, tag, "")
+
+
+def tag_sources(name: str, tags: dict[str, set[str]]) -> dict[str, str]:
+    """For each tag of an image, the tags.yml key it comes from (its own name, or a glob)."""
+    out: dict[str, str] = {}
+    stem = Path(name).stem
+    for key, ts in tags.items():
+        if key == name or key == stem or fnmatch.fnmatch(name, key):
+            for t in ts:
+                if out.get(t) != name:  # an own entry wins over a glob
+                    out[t] = key
+    return out

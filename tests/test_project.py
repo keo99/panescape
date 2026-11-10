@@ -131,3 +131,25 @@ def test_render_many_keeps_order(tmp_path):
     out = proj.render_many(cfg, jobs, then=lambda job, r: job.source.name)
     assert [name for _, name in out] == ["a.png", "b.png", "c.png"]
     assert all(r.mapping is None for r, _ in out)  # decoded sources released
+
+
+def test_rerendered_slices_are_reapplied_per_output(tmp_path):
+    """Slices keep their file names, so a re-render (e.g. new framing) must still re-apply."""
+    import types
+
+    from panescape.backends import base
+    proj = make_project(tmp_path, names=("a",))
+    shown = []
+    be = types.ModuleType("fakeoutputs")
+    be.KIND = "per_output"
+    be.get_layout = os_layout
+    be.match_monitors = base.match_monitors
+    be.native_size = base.native_size
+    be.set_outputs = lambda frame, **_k: shown.append(dict(frame))
+    proj.run(be, {"source": "cli", "images": ["a.png"], "mode": "single"})
+    assert len(shown) == 1
+    proj.sync(be)
+    assert len(shown) == 1          # nothing changed: left alone
+    proj.set_picture_crop("a.png", {"zoom": 1.3})
+    proj.sync(be)
+    assert len(shown) == 2          # re-rendered with the new framing: shown again
