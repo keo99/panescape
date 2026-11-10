@@ -159,11 +159,45 @@ def _set_swaybg(outputs: dict[str, Path], color: str) -> None:
     pf.write_text(str(proc.pid))
 
 
+def _swaybg_children_of_sway() -> list[int]:
+    """swaybg processes sway started itself (for 'output * bg')."""
+    out = []
+    for stat in Path("/proc").glob("[0-9]*/stat"):
+        try:
+            pid, rest = stat.read_text().split(" ", 1)
+            comm, fields = rest[1:].rsplit(") ", 1)
+            if comm == "swaybg":
+                parent = (Path("/proc") / fields.split()[1] / "comm").read_text().strip()
+                if parent == "sway":
+                    out.append(int(pid))
+        except (OSError, ValueError, IndexError):
+            continue
+    return out
+
+
+def _stop_other_setters(tool: str) -> None:
+    """Switching tools: don't leave the previous one's wallpaper drawn underneath (or on top)."""
+    if tool != "swaybg":
+        pf = _pidfile()
+        try:
+            os.kill(int(pf.read_text()), signal.SIGTERM)
+        except (OSError, ValueError):
+            pass
+        pf.unlink(missing_ok=True)
+    if tool != "sway" and compositor() == "sway":
+        for pid in _swaybg_children_of_sway():
+            try:
+                os.kill(pid, signal.SIGTERM)
+            except OSError:
+                pass
+
+
 def set_outputs(outputs: dict[str, Path], transition: float = 0.0, setter: str | None = None,
                 color: str = "#000000") -> None:
     """Show ``outputs[name]`` on each named output."""
     outputs = {n: Path(p).resolve() for n, p in outputs.items()}
     tool = choose_setter(setter)
+    _stop_other_setters(tool)
     if tool == "sway":
         cmd = "; ".join(f"output {shlex.quote(n)} bg {shlex.quote(str(p))} fill {color}" for n, p in outputs.items())
         _run(["swaymsg", cmd])

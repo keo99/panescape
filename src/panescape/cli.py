@@ -343,8 +343,9 @@ def cmd_slideshow(args) -> None:
         else:
             print("no slideshow runner is running")
         return
-    if not args.once and proj.runner_pid():
-        print(f"a slideshow runner is already running (pid {proj.runner_pid()})")
+    other = proj.runner_pid()
+    if not args.once and other and other != os.getpid():  # (whoever started us may have written our pid)
+        print(f"a slideshow runner is already running (pid {other})")
         return
     if not args.once:
         print(f"slideshow runner for {proj.root} (pid {os.getpid()}); Ctrl+C to stop")

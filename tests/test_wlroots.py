@@ -148,3 +148,29 @@ def test_project_per_output_slideshow(tmp_path, monkeypatch):
     proj.run_slideshow(be, once=True)
     assert len(shown) == 2
     assert proj.show_current(be) and len(shown) == 3
+
+
+def test_switching_setter_stops_our_swaybg(monkeypatch, tmp_path):
+    monkeypatch.setenv("XDG_RUNTIME_DIR", str(tmp_path))
+    monkeypatch.setattr(wlroots, "compositor", lambda: "hyprland")
+    killed = []
+    monkeypatch.setattr(wlroots.os, "kill", lambda pid, sig: killed.append(pid))
+    monkeypatch.setattr(wlroots, "_run", lambda cmd, check=True: types.SimpleNamespace(returncode=0, stdout="ok"))
+    wlroots._pidfile().write_text("4242")
+    wlroots.set_outputs({"DP-6": tmp_path / "a.png"}, setter="swww")
+    assert killed == [4242] and not wlroots._pidfile().exists()
+
+
+def test_runner_started_by_the_window_is_not_turned_away(monkeypatch, tmp_path):
+    """ensure_slideshow_runner writes the child's pid early; the child must not mistake it for another runner."""
+    import os
+
+    from panescape import cli
+    proj = make_project(tmp_path, names=("a",))
+    proj.backgrounds.mkdir(exist_ok=True)
+    proj.runner_pidfile.write_text(str(os.getpid()))
+    ran = []
+    monkeypatch.setattr(cli, "_backend", lambda: types.SimpleNamespace(KIND="per_output"))
+    monkeypatch.setattr(cli.Project, "run_slideshow", lambda self, be, once=False: ran.append(once))
+    cli.main(["--root", str(tmp_path), "slideshow"])
+    assert ran == [False]

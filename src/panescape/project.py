@@ -801,6 +801,7 @@ class Project:
         log = open(self.backgrounds / "slideshow.log", "a")  # noqa: SIM115 - handed to the child
         proc = subprocess.Popen([sys.executable, "-m", "panescape", "--root", str(self.root), "slideshow"],
                                 stdout=log, stderr=log, stdin=subprocess.DEVNULL, start_new_session=True)
+        self.runner_pidfile.write_text(str(proc.pid))  # the runner writes it too, once it's up
         return proc.pid
 
     def run_slideshow(self, backend, poll: float = 5.0, once: bool = False) -> None:
