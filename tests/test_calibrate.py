@@ -11,7 +11,7 @@ def test_pattern_tiles_render_at_native_size():
     for p in layout:
         img = calibrate.draw(layout, p.active, p.monitor.pixels, p)
         assert img.size == p.monitor.pixels
-        assert len(set(img.getdata())) > 3  # lines, rulers and labels were drawn
+        assert len(img.getcolors(1 << 24)) > 3  # lines, rulers and labels were drawn
 
 
 def test_horizontal_lines_are_continuous_in_desk_space():
