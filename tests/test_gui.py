@@ -1,0 +1,178 @@
+"""The layout editor and setup bar, driven without a display (Qt offscreen)."""
+
+import os
+
+import pytest
+
+pytest.importorskip("PySide6.QtWidgets", exc_type=ImportError)
+os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+
+from PySide6.QtWidgets import QApplication  # noqa: E402
+
+from panescape.project import Project  # noqa: E402
+
+CONFIG = """\
+# my desk, measured with a tape
+monitors:
+  - name: left
+    model: Samsung U28E590
+    rotation: portrait-right
+  - name: centre          # the Dell
+    model: Dell P2425H
+    gap: 2
+    v_pos: -20
+  - name: right
+    model: Samsung U28E590
+    rotation: portrait-left
+    right_of: centre
+"""
+
+
+@pytest.fixture(scope="module")
+def app():
+    a = QApplication.instance() or QApplication([])
+    a.setOrganizationName("panescape-tests")
+    a.setApplicationName("panescape-tests")
+    return a
+
+
+@pytest.fixture
+def window(app, tmp_path, monkeypatch):
+    from panescape.gui import common, layout_editor, main_window
+    for mod in (common, layout_editor, main_window):
+        monkeypatch.setattr(mod, "confirm", lambda *a, **k: True, raising=False)
+        monkeypatch.setattr(mod, "error", lambda _p, _t, text: pytest.fail(f"error dialog: {text}"), raising=False)
+    monkeypatch.setattr("panescape.backends.detect", lambda: None)
+    (tmp_path / "configurations").mkdir()
+    (tmp_path / "pictures").mkdir()
+    (tmp_path / "configurations" / "desk.yml").write_text(CONFIG)
+    (tmp_path / "configurations" / "laptop.yml").write_text(
+        "monitors:\n  - {name: main, resolution: FHD, size: 14in}\n")
+    (tmp_path / "setup.yml").write_text("# mine\nconfiguration: desk\nmode: single\n")
+    w = main_window.MainWindow(Project(tmp_path))
+    yield w
+    w.layout_editor.dirty = False
+    w.close()
+
+
+def test_opens_the_setups_layout(window):
+    ed = window.layout_editor
+    assert ed.name == "desk"
+    assert ed.names() == ["left", "centre", "right"]
+    assert ed.cfg is not None and not ed.dirty
+    assert window.setups.currentText() == "default"
+
+
+def test_drag_changes_gap_and_v_pos_and_save_keeps_comments(window, tmp_path):
+    ed = window.layout_editor
+    ed.nudge(1, 1.5, -3.0)   # right 1.5 mm, up 3 mm
+    e = ed.monitors()[1]
+    assert e["gap"] == 3.5 and e["v_pos"] == -17
+    assert ed.dirty and ed.form.v_pos.value() == -17
+    ed.nudge(2, 0, 2)        # right screen 2 mm down
+    assert ed.monitors()[2]["v_pos"] == -2
+    assert ed.save()
+    text = (tmp_path / "configurations" / "desk.yml").read_text()
+    assert "# my desk, measured with a tape" in text and "# the Dell" in text
+    assert "gap: 3.5" in text and "v_pos: -17" in text
+
+
+def test_anchor_does_not_move(window):
+    ed = window.layout_editor
+    ed.nudge(0, 10, 10)
+    assert not ed.dirty
+
+
+def test_placement_mode_switch(window):
+    ed = window.layout_editor
+    ed.list.setCurrentRow(2)
+    ed.form.mode.setCurrentIndex(ed.form.mode.findData("below"))
+    e = ed.monitors()[2]
+    assert e.get("below") == "left" or e.get("below") == "centre"
+    assert "right_of" not in e and ed.cfg is not None
+    ed.nudge(2, 4, 1)
+    assert e["h_pos"] == 4 and e["gap"] == 1
+
+
+def test_rename_updates_references(window):
+    ed = window.layout_editor
+    ed.list.setCurrentRow(1)
+    ed.rename_monitor("middle")
+    assert ed.names() == ["left", "middle", "right"]
+    assert ed.monitors()[2]["right_of"] == "middle"
+    assert ed.cfg is not None
+
+
+def test_add_and_remove(window):
+    ed = window.layout_editor
+    ed.list.setCurrentRow(2)
+    ed.add_monitor()
+    assert ed.names()[-1] == "monitor4" and ed.monitors()[3]["right_of"] == "right"
+    ed.remove_monitor()
+    assert ed.names() == ["left", "centre", "right"]
+    # removing the middle one re-attaches the right one
+    ed.list.setCurrentRow(1)
+    ed.remove_monitor()
+    assert ed.names() == ["left", "right"]
+    assert ed.cfg is not None
+
+
+def test_move_up_makes_new_anchor(window):
+    ed = window.layout_editor
+    ed.list.setCurrentRow(1)
+    ed.move_monitor(-1)
+    assert ed.names()[0] == "centre"
+    assert not any(k in ed.monitors()[0] for k in ("right_of", "left_of", "below", "above"))
+    assert ed.cfg is not None
+
+
+def test_bad_value_shows_problem_not_crash(window):
+    ed = window.layout_editor
+    ed.list.setCurrentRow(0)
+    ed.apply_edit({"model": None}, True)   # no model -> no size/resolution
+    assert ed.cfg is None and "needs" in ed.problems.text()
+    ed.apply_edit({"resolution": "3840x2160", "size": "28in"}, True)
+    assert ed.cfg is not None
+
+
+def test_choosing_a_layout_updates_the_setup(window, tmp_path):
+    ed = window.layout_editor
+    ed.choose("laptop")
+    assert ed.name == "laptop"
+    assert Project(tmp_path).load_setup()["configuration"] == "laptop"
+    assert "# mine" in (tmp_path / "setup.yml").read_text()
+
+
+def test_setups_bar(window, tmp_path, monkeypatch):
+    from PySide6.QtWidgets import QInputDialog
+    monkeypatch.setattr(QInputDialog, "getText", lambda *a, **k: ("evening", True))
+    window.new_setup()
+    p = Project(tmp_path)
+    assert p.setup_names() == ["default", "evening"] and p.active_setup() == "evening"
+    window.layout_editor.choose("laptop")
+    assert p.load_setup("evening")["configuration"] == "laptop"
+    assert p.load_setup("default")["configuration"] == "desk"
+    window.switch_setup("default")
+    assert window.layout_editor.name == "desk"
+    window.delete_setup()
+    assert p.setup_names() == ["evening"] or p.setup_names() == ["default"]
+
+
+def test_new_layout_copy(window, tmp_path, monkeypatch):
+    from panescape.gui import layout_editor as le
+
+    class FakeDialog:
+        Accepted = 1
+
+        def __init__(self, *a, **k):
+            from types import SimpleNamespace
+            self.name = SimpleNamespace(text=lambda: "desk2")
+            self.source = "copy"
+
+        def exec(self):
+            return 1
+    monkeypatch.setattr(le, "NewConfigDialog", FakeDialog)
+    monkeypatch.setattr(le.QDialog, "Accepted", 1)
+    window.layout_editor.new_config()
+    assert (tmp_path / "configurations" / "desk2.yml").read_text() == CONFIG
+    assert Project(tmp_path).load_setup()["configuration"] == "desk2"

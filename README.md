@@ -29,6 +29,9 @@ panescape make                     # check backgrounds/my_desk/*/preview.jpg
 panescape apply
 ```
 
+Prefer a window? `pipx install 'panescape[gui] @ git+https://github.com/keo99/panescape'`,
+then run `panescape-gui` (see [The window](#the-window)).
+
 `preview.jpg` draws your desk to scale. The yellow outline is the part of the photo that was used:
 
 ![Preview of the example desk](docs/images/preview.jpg)
@@ -38,8 +41,8 @@ Ubuntu 26.04, Wayland, with fractional scaling), **KDE Plasma 6** (tested with P
 [KDE Plasma](#kde-plasma)), and **sway** and **Hyprland** (tested with sway
 1.11, and Hyprland 0.53 with hyprpaper 0.8; see [sway and Hyprland](#sway-and-hyprland)). On other desktops panescape makes
 native-resolution images per monitor for you to set with your own tool (see
-[Other desktops](#other-desktops)). Python ≥ 3.10; the only dependencies are
-Pillow and PyYAML.
+[Other desktops](#other-desktops)). Python ≥ 3.10; the dependencies are
+Pillow, PyYAML and ruamel.yaml, plus PySide6 for the optional window.
 
 ### Why not HydraPaper or a "spanned" wallpaper?
 
@@ -48,6 +51,34 @@ the desktop, and they place it in pixel space. panescape decides *what each
 monitor should show* from the physical layout, and builds the images those
 tools need. On GNOME it applies them directly, slideshows included, with
 nothing running in the background.
+
+## The window
+
+```bash
+pipx install 'panescape[gui] @ git+https://github.com/keo99/panescape'
+panescape-gui            # or: panescape gui
+```
+
+![The layout editor](docs/images/gui-layout.png)
+
+It edits the same files as the command line, keeping your comments, so you
+can switch between the two whenever you like.
+
+- **Setup** (top bar): choose which [setup](#setupyml) is active, or create,
+  rename and delete setups.
+- **Layout:** pick the configuration the active setup uses, or make a new one
+  from the monitors connected now, as a copy, or from scratch. Each monitor has
+  a form for its model or size, resolution, rotation, bezels, position and gap.
+  Mistakes show up as you type, not when you apply.
+- **Drag monitors** on the to-scale desk, or select one and use the arrow keys
+  (0.5 mm steps; Shift ×10, Alt ×0.2). This changes the `gap` and the
+  `v_pos`/`h_pos` offsets.
+- **Show** a picture or the calibration pattern across the desk.
+- **Calibrate on my screens** puts the [test pattern](#calibrating) on your
+  real monitors and redraws it as you drag or type. Your wallpaper comes back
+  when you switch it off or close the window.
+
+More tabs (pictures and tags, applying, Unsplash) are on the way.
 
 ## How a project folder looks
 
@@ -81,6 +112,9 @@ panescape tag new.jpg -a landscape      # tag an image (updates a running slides
 panescape tags 'landscape + !night'     # list images matching a filter
 panescape calibrate --watch             # millimetre test pattern while you tune the config
 panescape status                        # configs, what's been made, what's applied
+panescape setup                         # list the setups in setup.yml (* = active)
+panescape setup evening --apply         # switch to another setup and apply it
+panescape gui                           # open the window
 panescape-apply …                       # same as `panescape apply …`
 ```
 
@@ -200,6 +234,9 @@ could be confused.
 
 ## Calibrating
 
+In the window, tick **Calibrate on my screens** on the Layout tab and drag
+the monitors until the lines meet. From the command line:
+
 ```bash
 panescape calibrate --watch      # Ctrl+C puts your wallpaper back
 panescape calibrate              # apply once; undo with --restore (or panescape apply)
@@ -248,6 +285,31 @@ shuffle: false
 ```
 
 Images that aren't made yet, or have changed, are rendered automatically.
+
+### Several setups
+
+`setup.yml` can hold several named setups, for example a calm one for work
+and a colourful one for the evening:
+
+```yaml
+active: work              # what apply / sync / the slideshow follow
+setter: swww              # keys out here are shared by every setup
+setups:
+  work:
+    configuration: desk_H
+    filter: minimal + !people
+    interval: 1h
+  evening:
+    configuration: desk_H
+    filter: landscape + sunset
+    interval: 10m
+```
+
+Switch with `panescape setup evening` (add `--apply` to apply straight away),
+`panescape apply --setup evening`, or the Setup menu in the window. A
+`setup.yml` without `setups:`, like the one above, is a single setup called
+`default`. Creating a second setup in the window converts the file for you,
+and comments are kept.
 
 ## Keeping the slideshow up to date
 
@@ -390,10 +452,10 @@ outer size without stand, and the bezels if you've measured them. Then open a PR
 ## Development
 
 ```bash
-pip install -e '.[dev]'
-pytest
+pip install -e '.[dev,gui]'
+pytest                       # GUI tests run headless (QT_QPA_PLATFORM=offscreen)
 ruff check .
-python docs/make_images.py   # rebuild the README images
+python docs/make_images.py   # rebuild the README images and the window screenshot
 ```
 
 ## Credits

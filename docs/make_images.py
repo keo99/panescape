@@ -113,8 +113,47 @@ def main() -> None:
 
     mapping = Mapping(src, layout.canvas, CropSpec())
     render_preview(src, mapping, layout, width_px=WIDTH).save(OUT / "preview.jpg", quality=85, optimize=True)
-    for f in sorted(OUT.glob("*.jpg")):
+    gui_screenshot(photo())
+    for f in sorted(OUT.glob("*.*g")):
         print(f"{f.relative_to(ROOT)}  {f.stat().st_size // 1024} KiB")
+
+
+def gui_screenshot(picture: Path) -> None:
+    """The layout editor on the example desk (needs PySide6; drawn offscreen)."""
+    import os
+    import shutil
+    import tempfile
+    try:
+        os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
+        from PySide6.QtWidgets import QApplication
+    except ImportError:
+        print("PySide6 not installed: skipping the GUI screenshot")
+        return
+    from panescape.gui.main_window import MainWindow
+    from panescape.project import Project
+    with tempfile.TemporaryDirectory() as tmp:
+        root = Path(tmp) / "panescape"
+        (root / "configurations").mkdir(parents=True)
+        (root / "pictures").mkdir()
+        shutil.copy(CONFIG, root / "configurations" / "my_desk.yml")
+        shutil.copy(picture, root / "pictures" / "triglav.jpg")
+        (root / "setup.yml").write_text("configuration: my_desk\nmode: slideshow\n")
+        app = QApplication.instance() or QApplication([])
+        app.setOrganizationName("panescape-docs")
+        app.setApplicationName("panescape-docs")
+        win = MainWindow(Project(root))
+        win.setWindowTitle("panescape")
+        from PySide6.QtWidgets import QLabel
+        win.findChild(QLabel, "project_path").setText("~/panescape")
+        win.resize(1400, 800)
+        win.show()
+        ed = win.layout_editor
+        ed.preview.setCurrentIndex(ed.preview.findText("triglav.jpg"))
+        ed.list.setCurrentRow(1)
+        for _ in range(5):
+            app.processEvents()
+        win.grab().save(str(OUT / "gui-layout.png"))
+        win.close()
 
 
 if __name__ == "__main__":
