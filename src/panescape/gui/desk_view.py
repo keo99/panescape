@@ -6,11 +6,14 @@ the editor turns the movement into gap / v_pos / h_pos changes.
 
 from __future__ import annotations
 
+from dataclasses import replace
+
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
 from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPainterPath, QPen
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from ..layout import Layout, Rect
+from ..render import CropSpec
 
 BG = QColor(30, 30, 34)
 HOUSING = QColor(62, 62, 68)
@@ -27,6 +30,8 @@ class DeskView(QWidget):
     nudged = Signal(int, float, float)     # monitor index, dx, dy in mm (y down)
     nudge_done = Signal()                  # end of a drag
     resized = Signal()
+    crop_changed = Signal(object)          # CropSpec, while framing a picture
+    crop_done = Signal()                   # end of a framing drag / zoom
 
     def __init__(self, parent=None):
         super().__init__(parent)
@@ -43,6 +48,9 @@ class DeskView(QWidget):
         self._frozen = None      # view transform held during a drag
         self._drag = None        # (index, last mm point)
         self._pending = [0.0, 0.0]
+        self.framing = False     # picture mode: drag pans the picture, wheel zooms
+        self.crop = CropSpec()
+        self.labels = True
 
     # ------------------------------------------------------------------ api
     def set_layout(self, layout: Layout | None, valid: bool = True, error: str = "") -> None:
@@ -53,9 +61,15 @@ class DeskView(QWidget):
         self.sel = i
         self.update()
 
-    def set_image(self, image: QImage | None, pattern: bool = False) -> None:
-        """A picture to show across the lit areas (cover-fitted to the desk)."""
+    def set_image(self, image: QImage | None, pattern: bool = False, crop: CropSpec | None = None) -> None:
+        """A picture to show across the lit areas, framed by ``crop`` (default: centred, cover)."""
         self.image, self.image_is_pattern = image, pattern
+        self.crop = crop or CropSpec()
+        self.update()
+
+    def set_framing(self, on: bool) -> None:
+        """Picture mode: dragging moves the picture and the wheel zooms (monitors stay put)."""
+        self.framing = on
         self.update()
 
     def px_per_mm(self) -> float:
@@ -96,6 +110,18 @@ class DeskView(QWidget):
         k, ox, oy = t
         return ((pos.x() - ox) / k, (pos.y() - oy) / k)
 
+    def _image_mm(self) -> tuple[Rect, float] | None:
+        """Where the whole picture lies on the desk (mm), and its pixels per mm."""
+        if self.image is None or self.image.isNull() or not self.layout_:
+            return None
+        c = self.layout_.canvas
+        iw, ih = self.image.width(), self.image.height()
+        cr = self.crop
+        s = (min(iw / c.w, ih / c.h) if cr.fit == "cover" else max(iw / c.w, ih / c.h)) * cr.zoom
+        ox = (iw - c.w * s) * cr.anchor[0]
+        oy = (ih - c.h * s) * cr.anchor[1]
+        return Rect(c.x - ox / s, c.y - oy / s, iw / s, ih / s), s
+
     def _hit(self, pos: QPointF) -> int:
         t = self._transform()
         if not t or not self.layout_:
@@ -118,6 +144,11 @@ class DeskView(QWidget):
             return
         k = t[0]
         lay = self.layout_
+        has_picture = self.image is not None and not self.image.isNull() and not self.image_is_pattern
+        if has_picture and self.framing:   # the parts that get cut off, faintly, behind the monitors
+            qp.setOpacity(0.28)
+            qp.drawImage(self._rect(self._image_mm()[0], t), self.image)
+            qp.setOpacity(1.0)
         for p in lay:
             qp.setPen(QPen(OUTLINE, 1))
             qp.setBrush(HOUSING)
@@ -127,18 +158,14 @@ class DeskView(QWidget):
             lit.addRect(self._rect(p.active, t))
         qp.fillPath(lit, LIT)
         if self.image is not None and not self.image.isNull():
+            if self.image_is_pattern:   # drawn for exactly the canvas
+                where = self._rect(lay.canvas, t)
+            else:
+                where = self._rect(self._image_mm()[0], t)
+                qp.fillPath(lit, QColor(self.crop.background))
             qp.save()
             qp.setClipPath(lit)
-            target = self._rect(lay.canvas, t)
-            iw, ih = self.image.width(), self.image.height()
-            c = lay.canvas
-            if self.image_is_pattern:   # drawn for exactly the canvas
-                src = QRectF(0, 0, iw, ih)
-            else:                       # cover: crop the picture's edges, centred
-                s = min(iw / c.w, ih / c.h)
-                w, h = c.w * s, c.h * s
-                src = QRectF((iw - w) / 2, (ih - h) / 2, w, h)
-            qp.drawImage(target, self.image, src)
+            qp.drawImage(where, self.image)
             qp.restore()
 
         small = QFont(self.font())
@@ -146,7 +173,7 @@ class DeskView(QWidget):
         big = QFont(self.font())
         big.setPointSizeF(max(8.0, min(14.0, 4.5 * k)))
         big.setBold(True)
-        for p in lay:
+        for p in lay if self.labels else []:
             m = p.monitor
             r = self._rect(p.active, t)
             if m.index == self.sel:
@@ -178,7 +205,9 @@ class DeskView(QWidget):
         qp.setFont(self.font())
         b = self._bounds()
         footer = f"desk {b.w:.0f} × {b.h:.0f} mm  ·  picture area {lay.canvas.w:.0f} × {lay.canvas.h:.0f} mm"
-        if self.sel > 0:
+        if self.framing and self.image is not None:
+            footer = (f"zoom {self.crop.zoom:.2f}×  ·  drag the picture to move it, scroll to zoom")
+        elif self.sel > 0:
             footer += "  ·  drag or use arrow keys to move (Shift ×10, Alt ×0.2)"
         qp.setPen(MUTED)
         qp.drawText(QRectF(8, self.height() - 22, self.width() - 16, 20), Qt.AlignLeft | Qt.AlignVCenter, footer)
@@ -190,6 +219,13 @@ class DeskView(QWidget):
 
     # ------------------------------------------------------------------ interaction
     def mousePressEvent(self, e):
+        if self.framing:
+            if e.button() == Qt.LeftButton and self._image_mm():
+                t = self._transform()
+                self._frozen = t
+                self._drag = (-1, self._to_mm(e.position(), t))
+                self.setCursor(Qt.ClosedHandCursor)
+            return
         i = self._hit(e.position())
         if i >= 0:
             self.selected.emit(i)
@@ -202,6 +238,15 @@ class DeskView(QWidget):
         self.setFocus()
 
     def mouseMoveEvent(self, e):
+        if self.framing:
+            if not self._drag:
+                self.setCursor(Qt.OpenHandCursor if self._image_mm() else Qt.ArrowCursor)
+                return
+            _, (x0, y0) = self._drag
+            x, y = self._to_mm(e.position(), self._frozen)
+            self._drag = (-1, (x, y))
+            self._pan(x - x0, y - y0)
+            return
         if not self._drag:
             self.setCursor(Qt.OpenHandCursor if self._hit(e.position()) > 0 else Qt.ArrowCursor)
             return
@@ -226,12 +271,49 @@ class DeskView(QWidget):
             self.nudged.emit(i, dx, dy)
 
     def mouseReleaseEvent(self, _e):
+        if self._drag and self.framing:
+            self._drag = None
+            self._frozen = None
+            self.setCursor(Qt.OpenHandCursor)
+            self.crop_done.emit()
+            return
         if self._drag:
             self._drag = None
             self._frozen = None
             self.setCursor(Qt.ArrowCursor)
             self.nudge_done.emit()
             self.update()
+
+    def _pan(self, dx: float, dy: float) -> None:
+        """Move the picture by (dx, dy) mm: turns into a new anchor."""
+        found = self._image_mm()
+        if not found:
+            return
+        _, s = found
+        c = self.layout_.canvas
+        iw, ih = self.image.width(), self.image.height()
+        ax, ay = self.crop.anchor
+        span_x, span_y = iw - c.w * s, ih - c.h * s   # px of slack on each axis
+        if abs(span_x) > 1e-6:
+            ax = min(1.0, max(0.0, ax - dx * s / span_x))
+        if abs(span_y) > 1e-6:
+            ay = min(1.0, max(0.0, ay - dy * s / span_y))
+        self._set_crop(replace(self.crop, anchor=(round(ax, 4), round(ay, 4))))
+
+    def _set_crop(self, crop: CropSpec) -> None:
+        self.crop = crop
+        self.update()
+        self.crop_changed.emit(crop)
+
+    def wheelEvent(self, e):
+        if not (self.framing and self._image_mm()):
+            return super().wheelEvent(e)
+        steps = e.angleDelta().y() / 120
+        zoom = min(8.0, max(0.5, self.crop.zoom * (1.1 ** steps)))
+        if abs(zoom - 1.0) < 0.03:
+            zoom = 1.0  # snap back to the exact fit
+        self._set_crop(replace(self.crop, zoom=round(zoom, 3)))
+        self.crop_done.emit()
 
     def keyPressEvent(self, e):
         moves = {Qt.Key_Left: (-1, 0), Qt.Key_Right: (1, 0), Qt.Key_Up: (0, -1), Qt.Key_Down: (0, 1)}

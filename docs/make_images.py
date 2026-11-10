@@ -119,40 +119,69 @@ def main() -> None:
 
 
 def gui_screenshot(picture: Path) -> None:
-    """The layout editor on the example desk (needs PySide6; drawn offscreen)."""
+    """The window on the example desk (needs PySide6; drawn offscreen)."""
     import os
     import shutil
     import tempfile
     try:
         os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
-        from PySide6.QtWidgets import QApplication
+        from PySide6.QtCore import QThreadPool
+        from PySide6.QtWidgets import QApplication, QLabel
     except ImportError:
-        print("PySide6 not installed: skipping the GUI screenshot")
+        print("PySide6 not installed: skipping the GUI screenshots")
         return
     from panescape.gui.main_window import MainWindow
     from panescape.project import Project
+    from panescape.tags import edit_tags
     with tempfile.TemporaryDirectory() as tmp:
         root = Path(tmp) / "panescape"
         (root / "configurations").mkdir(parents=True)
         (root / "pictures").mkdir()
+        os.environ["XDG_CACHE_HOME"] = str(Path(tmp) / "cache")
         shutil.copy(CONFIG, root / "configurations" / "my_desk.yml")
         shutil.copy(picture, root / "pictures" / "triglav.jpg")
+        # a few views cut from the same CC0 photo, so the grid has something to show
+        src = load_image(picture)
+        w, h = src.size
+        views = {"triglav-peaks.jpg": (0.05, 0.0, 0.55, 0.45), "triglav-meadow.jpg": (0.3, 0.45, 0.95, 1.0),
+                 "triglav-forest.jpg": (0.0, 0.3, 0.4, 0.8), "triglav-ridge.jpg": (0.55, 0.05, 1.0, 0.5),
+                 "triglav-valley.jpg": (0.2, 0.2, 0.8, 0.75)}
+        for name, (x0, y0, x1, y1) in views.items():
+            src.crop((int(x0 * w), int(y0 * h), int(x1 * w), int(y1 * h))).save(root / "pictures" / name,
+                                                                                 quality=85)
+        tags = {"triglav.jpg": {"landscape", "mountains", "snow", "panorama"},
+                "triglav-peaks.jpg": {"mountains", "snow", "sky"}, "triglav-meadow.jpg": {"landscape", "snow"},
+                "triglav-forest.jpg": {"trees", "snow"}, "triglav-ridge.jpg": {"mountains", "sky"},
+                "triglav-valley.jpg": {"landscape", "mountains"}}
+        edit_tags(root / "pictures" / "tags.yml", {n: (t, set()) for n, t in tags.items()})
         (root / "setup.yml").write_text("configuration: my_desk\nmode: slideshow\n")
         app = QApplication.instance() or QApplication([])
         app.setOrganizationName("panescape-docs")
         app.setApplicationName("panescape-docs")
         win = MainWindow(Project(root))
         win.setWindowTitle("panescape")
-        from PySide6.QtWidgets import QLabel
         win.findChild(QLabel, "project_path").setText("~/panescape")
         win.resize(1400, 800)
         win.show()
+
+        def settle():
+            for _ in range(10):
+                QThreadPool.globalInstance().waitForDone(10000)
+                app.processEvents()
+
         ed = win.layout_editor
         ed.preview.setCurrentIndex(ed.preview.findText("triglav.jpg"))
         ed.list.setCurrentRow(1)
-        for _ in range(5):
-            app.processEvents()
+        settle()
         win.grab().save(str(OUT / "gui-layout.png"))
+
+        win.tabs.setCurrentWidget(win.pictures_tab)
+        tab = win.pictures_tab
+        tab.filter.setText("snow + !trees")
+        tab.apply_filter()
+        tab.items["triglav.jpg"].setSelected(True)
+        settle()
+        win.grab().save(str(OUT / "gui-pictures.png"))
         win.close()
 
 

@@ -83,12 +83,34 @@ can switch between the two whenever you like.
   real monitors and redraws it as you drag or type. Your wallpaper comes back
   when you switch it off or close the window.
 
-More tabs (pictures and tags, applying, Unsplash) are on the way.
+![The pictures and tags tab](docs/images/gui-pictures.png)
+
+The **Pictures & tags** tab:
+
+- **Add pictures** with the button, or drop files from your file manager onto
+  the grid. They're copied into `pictures/`.
+- **Tag** the selected pictures: type tags and press Enter. Click a tag's ✕ to
+  remove it. With several pictures selected, a tag that only some of them have
+  shows as e.g. `sea 2/5`; click it to give it to all of them.
+- **Manage tags** in the sidebar, which shows how many pictures have each one.
+  Click a tag to filter by it, or Ctrl+click to add it to the filter. Rename a
+  tag to an existing one to merge them.
+- **Filter** with the same syntax as `setup.yml` (`landscape + water +
+  !mountains`). **Use for setup** saves the filter to the active setup.
+- **Frame** a picture: drag it across the desk preview and scroll to zoom. The
+  parts that will be cut off show faintly, and a note warns when a screen would
+  show the picture enlarged (soft). The framing is saved in
+  `pictures/crops.yml` and used by every setup.
+
+If a panescape wallpaper is on the desktop, it updates a couple of seconds
+after a change.
+
+More tabs (applying, Unsplash) are on the way.
 
 ## How a project folder looks
 
 ```
-pictures/                     your source images (+ tags.yml)
+pictures/                     your source images (+ tags.yml, crops.yml)
 configurations/my_desk.yml    physical description of a monitor setup
 setup.yml                     what `panescape apply` puts on the desktop
 backgrounds/<config>/<image>/
@@ -372,8 +394,24 @@ In `setup.yml`, `filter:` narrows `images:`. Use `images: all` to filter the who
 | `( … )` | grouping |
 | `city*` | glob on tag names |
 
-Tags are case-insensitive, and untagged images match `!x`. The CLI rewrites
-`tags.yml` and drops any comments you added, apart from its own header.
+Tags are case-insensitive, untagged images match `!x`, and `!*` matches
+pictures with no tags at all. Comments you add to `tags.yml` are kept when the
+command line or the window edits it.
+
+## Framing a picture
+
+By default each picture is centred and scaled to fill the desk. To frame one
+differently, drag it in the window's Pictures tab, or write it in
+`pictures/crops.yml`:
+
+```yaml
+tall-photo.jpg: {anchor: [0.5, 0.2], zoom: 1.2}    # higher up, a little closer
+panorama.jpg: {fit: contain}                       # whole picture, black bars
+```
+
+Later settings win: the configuration's `crop:`, then `setup.yml`'s `crop:`,
+then `crops.yml`, then an image entry in `setup.yml`'s `images:` list, then
+`--anchor`/`--zoom`/`--fit` on the command line.
 
 ## How applying works on GNOME
 

@@ -1095,7 +1095,14 @@ class LayoutEditor(QWidget):
                 elif img.width() > 2400:
                     img = img.scaledToWidth(2400, Qt.SmoothTransformation)
                 self._pictures[data] = img
-            self.desk.set_image(img)
+            crop = None
+            if self.cfg is not None:
+                try:
+                    from ..project import ImageJob
+                    crop = self.project.crop_for(self.cfg, ImageJob(Path(data)))
+                except (ValueError, ProjectError):
+                    crop = None
+            self.desk.set_image(img, crop=crop)
 
     def _refresh_pattern(self) -> None:
         if self.preview.currentData() != "pattern" or self.layout_ is None:
