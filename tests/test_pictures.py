@@ -183,3 +183,24 @@ def test_import_and_trash(tab, tmp_path):
     tab.trash_selected()
     assert "new.png" not in tab.items
     assert "new.png" not in load_tags(tab.project.tags_file)
+
+
+def test_dropping_files_onto_the_grid(tab, tmp_path):
+    from PySide6.QtCore import QMimeData, QPointF, Qt, QUrl
+    from PySide6.QtGui import QDragEnterEvent, QDropEvent
+    from PySide6.QtWidgets import QApplication
+
+    # Real drags are delivered to the viewport, and only if it accepts drops.
+    port = tab.grid.viewport()
+    assert port.acceptDrops()
+    src = tmp_path / "dropped.png"
+    Image.new("RGB", (64, 64)).save(src)
+    mime = QMimeData()
+    mime.setUrls([QUrl.fromLocalFile(str(src)), QUrl.fromLocalFile(str(tmp_path / "notes.txt"))])
+    pos = port.rect().center()
+    enter = QDragEnterEvent(pos, Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier)
+    QApplication.sendEvent(port, enter)
+    assert enter.isAccepted()
+    QApplication.sendEvent(port, QDropEvent(QPointF(pos), Qt.CopyAction, mime, Qt.LeftButton, Qt.NoModifier))
+    tab.settle()
+    assert "dropped.png" in tab.items

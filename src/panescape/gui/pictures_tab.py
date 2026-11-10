@@ -58,8 +58,11 @@ class PictureGrid(QListWidget):
         self.setSelectionMode(QAbstractItemView.ExtendedSelection)
         self.setWordWrap(True)
         self.setUniformItemSizes(True)
-        self.setAcceptDrops(True)
         self.setDragDropMode(QAbstractItemView.DropOnly)
+        # setMovement(Static) switches drops off on the viewport, which is the widget
+        # that actually receives them; switch them back on.
+        self.setAcceptDrops(True)
+        self.viewport().setAcceptDrops(True)
 
     def _files(self, e) -> list[str]:
         if not e.mimeData().hasUrls():
