@@ -24,7 +24,7 @@ from ..project import Project, ProjectError
 from .common import confirm, error
 from .layout_editor import LayoutEditor
 
-DOCS_URL = "https://github.com/keo99/panescape#readme"
+DOCS_URL = "https://keo99.github.io/panescape/"
 ISSUES_URL = "https://github.com/keo99/panescape/issues"
 _windows: list = []  # windows opened from File ▸ Open folder (kept alive here)
 

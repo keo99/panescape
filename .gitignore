@@ -13,3 +13,4 @@ dist/
 /setup.yml
 # README images are rebuilt from a downloaded CC0 photo
 /docs/.cache/
+/site/

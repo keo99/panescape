@@ -1,0 +1,66 @@
+site_name: panescape
+site_description: True-to-scale wallpapers across monitors of different sizes, resolutions and orientations
+site_url: https://keo99.github.io/panescape/
+repo_url: https://github.com/keo99/panescape
+repo_name: keo99/panescape
+edit_uri: edit/main/docs/
+copyright: MIT licence · © Kieran Ralston
+
+docs_dir: docs
+exclude_docs: |
+  make_images.py
+  .cache/
+
+theme:
+  name: material
+  logo: images/icon.svg
+  favicon: images/icon.svg
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: blue grey
+      accent: light blue
+      toggle:
+        icon: material/weather-night
+        name: Dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: blue grey
+      accent: light blue
+      toggle:
+        icon: material/weather-sunny
+        name: Light mode
+  features:
+    - navigation.sections
+    - navigation.footer
+    - navigation.top
+    - content.code.copy
+    - search.highlight
+
+nav:
+  - Home: index.md
+  - Start:
+      - Installing: install.md
+      - Getting started: getting-started.md
+  - Using panescape:
+      - The window: window.md
+      - Unsplash: unsplash.md
+      - Command line: cli.md
+      - Setups and slideshows: setups.md
+      - Pictures, tags and framing: pictures.md
+  - Your desk:
+      - Configuration: configuration.md
+      - Layouts: layouts.md
+      - Calibrating: calibrating.md
+      - Desktops: desktops.md
+  - Development: development.md
+
+markdown_extensions:
+  - admonition
+  - attr_list
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.inlinehilite
