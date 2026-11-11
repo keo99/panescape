@@ -42,7 +42,7 @@ from .. import tags as tagmod
 from .. import yamledit
 from ..project import Project, ProjectError, autostart_file, capture_log, frame_index, install_autostart, runner_argv
 from ..units import parse_duration
-from .common import error, number, run_async
+from .common import boxed, error, number, run_async
 from .widgets import make_thumbnail
 
 STRIP = QSize(120, 80)
@@ -575,8 +575,7 @@ class ApplyTab(QWidget):
         for p, it in items.items():
             def done(res, it=it):
                 if gen == self._thumb_gen:
-                    it.setIcon(QIcon(QPixmap.fromImage(res[0]).scaled(STRIP, Qt.KeepAspectRatio,
-                                                                      Qt.SmoothTransformation)))
+                    it.setIcon(QIcon(boxed(res[0], STRIP)))
             run_async(lambda p=p: make_thumbnail(p), done)
 
     # ------------------------------------------------------------------ applying

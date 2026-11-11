@@ -34,7 +34,7 @@ from PySide6.QtWidgets import (
 from .. import tags as tagmod
 from ..project import IMAGE_EXTS, ImageJob, Project, ProjectError
 from ..render import CropSpec
-from .common import confirm, error, run_async
+from .common import boxed, confirm, error, run_async
 from .desk_view import DeskView
 from .widgets import Chip, FlowLayout, make_thumbnail
 
@@ -300,7 +300,7 @@ class PicturesTab(QWidget):
             self.sizes[name] = size
             item = self.items.get(name)
             if item is not None and not img.isNull():
-                item.setIcon(QIcon(QPixmap.fromImage(img)))
+                item.setIcon(QIcon(boxed(img, ICON)))
             if name == self._crop_name:
                 self._update_quality()
 

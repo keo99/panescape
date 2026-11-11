@@ -94,3 +94,15 @@ def app_icon():
         p.end()
         icon.addPixmap(pm)
     return icon
+
+
+def boxed(img, size):
+    """``img`` scaled into the middle of a transparent ``size`` box, so grid labels line up."""
+    from PySide6.QtGui import QPainter, QPixmap
+    pm = QPixmap(size)
+    pm.fill(Qt.transparent)
+    scaled = img.scaled(size, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+    p = QPainter(pm)
+    p.drawImage((size.width() - scaled.width()) // 2, (size.height() - scaled.height()) // 2, scaled)
+    p.end()
+    return pm

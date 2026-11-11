@@ -165,6 +165,7 @@ def gui_screenshot(picture: Path) -> None:
         win = MainWindow(Project(root))
         win.setWindowTitle("panescape")
         win.findChild(QLabel, "project_path").setText("~/panescape")
+        win.guide.dismiss()  # the getting-started strip is for new folders
         win.resize(1400, 800)
         win.show()
 

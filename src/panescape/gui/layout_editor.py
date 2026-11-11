@@ -596,7 +596,9 @@ class LayoutEditor(QWidget):
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
         scroll.setWidget(self.form)
-        scroll.setMinimumWidth(380)
+        # wide enough for the whole form: with no horizontal scroll bar, anything wider is cut off
+        scroll.setMinimumWidth(max(380, self.form.minimumSizeHint().width()
+                                   + scroll.verticalScrollBar().sizeHint().width() + 6))
         split.addWidget(scroll)
         split.setStretchFactor(1, 1)
         split.setSizes([170, 700, 400])

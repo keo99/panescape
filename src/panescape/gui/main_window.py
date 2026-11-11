@@ -54,6 +54,8 @@ class MainWindow(QMainWindow):
         home = Path.home()
         where = QLabel("~/" + str(project.root.relative_to(home)) if project.root.is_relative_to(home)
                        else str(project.root))
+        where.setToolTip(str(project.root))
+        where.setText(where.fontMetrics().elidedText(where.text(), Qt.ElideMiddle, 420))
         where.setObjectName("project_path")
         where.setStyleSheet("color: palette(placeholder-text)")
         bar.addWidget(where)
