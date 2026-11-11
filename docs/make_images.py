@@ -137,7 +137,11 @@ def gui_screenshot(picture: Path) -> None:
         root = Path(tmp) / "panescape"
         (root / "configurations").mkdir(parents=True)
         (root / "pictures").mkdir()
+        # never touch your real Unsplash key, keyring or settings
         os.environ["XDG_CACHE_HOME"] = str(Path(tmp) / "cache")
+        os.environ["XDG_CONFIG_HOME"] = str(Path(tmp) / "config")
+        os.environ["PANESCAPE_NO_KEYRING"] = "1"
+        os.environ.pop("PANESCAPE_UNSPLASH_KEY", None)
         shutil.copy(CONFIG, root / "configurations" / "my_desk.yml")
         shutil.copy(picture, root / "pictures" / "triglav.jpg")
         # a few views cut from the same CC0 photo, so the grid has something to show
@@ -203,7 +207,52 @@ def gui_screenshot(picture: Path) -> None:
         win.apply_tab.refresh_runner()
         settle()
         win.grab().save(str(OUT / "gui-apply.png"))
+
+        unsplash_screenshot(win, src, settle)
         win.close()
+
+
+def unsplash_screenshot(win, src: Image.Image, settle) -> None:
+    """The Unsplash tab with made-up results cut from the CC0 photo (no network, no key)."""
+    import io
+
+    from panescape import unsplash
+    w, h = src.size
+    boxes = [(0.0, 0.0, 0.6, 0.6), (0.4, 0.0, 1.0, 0.6), (0.2, 0.3, 0.8, 0.9), (0.0, 0.4, 0.6, 1.0),
+             (0.4, 0.4, 1.0, 1.0), (0.1, 0.1, 0.7, 0.7), (0.3, 0.2, 0.9, 0.8), (0.0, 0.2, 0.6, 0.8),
+             (0.25, 0.05, 0.85, 0.65)]
+    jpegs = {}
+    for i, (x0, y0, x1, y1) in enumerate(boxes):
+        buf = io.BytesIO()
+        src.crop((int(x0 * w), int(y0 * h), int(x1 * w), int(y1 * h))).resize((900, 600)).save(buf, "JPEG")
+        jpegs[f"sample{i}"] = buf.getvalue()
+
+    def fake_photo(i: int) -> dict:
+        pid, user = f"sample{i}", f"example{i + 1}"
+        return {"id": pid, "width": 9000, "height": 6000, "alt_description": "snowy mountains in the alps",
+                "user": {"name": f"Example Photographer {i + 1}", "username": user,
+                         "links": {"html": f"https://unsplash.com/@{user}"}},
+                "urls": {"small": f"https://images.unsplash.com/{pid}", "regular": f"https://images.unsplash.com/{pid}"},
+                "links": {"html": f"https://unsplash.com/photos/{pid}"}}
+
+    class FakeClient:
+        remaining = 47
+
+        def search(self, q, page=1, orientation="landscape", **_k):
+            return {"total": 2814, "total_pages": 94, "results": [fake_photo(i) for i in range(len(boxes))]}
+
+    unsplash.fetch_image = lambda url, **_k: jpegs[url.rsplit("/", 1)[1]]
+    tab = win.unsplash_tab
+    tab.client, tab.key_where = FakeClient(), "keyring"
+    tab._show_key_box(False)
+    tab._update_key_status()
+    win.tabs.setCurrentWidget(tab)
+    tab.query.setText("alpine snow")
+    tab.search()
+    settle()
+    tab.grid.setCurrentRow(2)
+    settle()
+    win.grab().save(str(OUT / "gui-unsplash.png"))
 
 
 if __name__ == "__main__":

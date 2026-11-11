@@ -124,7 +124,10 @@ The **Apply** tab:
   when your config already has it. It also lets you choose the wallpaper tool
   (`setter`).
 
-The **Unsplash** tab finds new pictures:
+![The Unsplash tab (sample results)](docs/images/gui-unsplash.png)
+
+The **Unsplash** tab finds new pictures (the screenshot shows made-up sample
+results):
 
 - **Search** Unsplash (landscape photos by default, since they suit a wide
   desk), or press **Suggest for me** for photos like the ones you have, based
@@ -561,7 +564,7 @@ outer size without stand, and the bezels if you've measured them. Then open a PR
 pip install -e '.[dev,gui]'
 pytest                       # GUI tests run headless (QT_QPA_PLATFORM=offscreen)
 ruff check .
-python docs/make_images.py   # rebuild the README images and the window screenshot
+python docs/make_images.py   # rebuild the README images and the window screenshots
 ```
 
 ## Credits
