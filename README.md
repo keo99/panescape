@@ -6,7 +6,7 @@
 become panes of one window onto a single picture, even when they differ in size,
 resolution, orientation and height.
 
-![The same photo spanned by pixels (top) and by panescape (bottom) across two portrait 28" 4K screens and a lower landscape 24" 1080p screen](docs/images/comparison.jpg)
+![The same photo spanned by pixels (top) and by panescape (bottom) across two portrait 28" 4K screens and a lower landscape 24" 1080p screen](https://raw.githubusercontent.com/keo99/panescape/main/docs/images/comparison.jpg)
 
 Most spanning tools work in **pixels**. A 28" 4K panel packs about 1.7× more
 pixels per millimetre than a 24" 1080p panel, so with pixel spanning the picture
@@ -18,7 +18,7 @@ monitor's native resolution.
 ## Quick start
 
 ```bash
-pipx install git+https://github.com/keo99/panescape
+pipx install panescape
 mkdir ~/panescape && cd ~/panescape
 panescape init                     # pictures/, configurations/, backgrounds/, setup.yml
 panescape detect --write my_desk   # config skeleton from your current displays
@@ -29,12 +29,12 @@ panescape make                     # check backgrounds/my_desk/*/preview.jpg
 panescape apply
 ```
 
-Prefer a window? `pipx install 'panescape[gui] @ git+https://github.com/keo99/panescape'`,
+Prefer a window? `pipx install 'panescape[gui]'`,
 then run `panescape-gui` (see [The window](#the-window)).
 
 `preview.jpg` draws your desk to scale. The yellow outline is the part of the photo that was used:
 
-![Preview of the example desk](docs/images/preview.jpg)
+![Preview of the example desk](https://raw.githubusercontent.com/keo99/panescape/main/docs/images/preview.jpg)
 
 **Status:** applies wallpapers and slideshows on **GNOME** (tested on GNOME 50 /
 Ubuntu 26.04, Wayland, with fractional scaling), **KDE Plasma 6** (tested with Plasma 6.6; see
@@ -60,11 +60,11 @@ HydraPaper's daemon or Variety running.
 ## The window
 
 ```bash
-pipx install 'panescape[gui] @ git+https://github.com/keo99/panescape'
+pipx install 'panescape[gui]'
 panescape-gui            # or: panescape gui
 ```
 
-![The layout editor](docs/images/gui-layout.png)
+![The layout editor](https://raw.githubusercontent.com/keo99/panescape/main/docs/images/gui-layout.png)
 
 It edits the same files as the command line, keeping your comments, so you
 can switch between the two whenever you like.
@@ -83,7 +83,7 @@ can switch between the two whenever you like.
   real monitors and redraws it as you drag or type. Your wallpaper comes back
   when you switch it off or close the window.
 
-![The pictures and tags tab](docs/images/gui-pictures.png)
+![The pictures and tags tab](https://raw.githubusercontent.com/keo99/panescape/main/docs/images/gui-pictures.png)
 
 The **Pictures & tags** tab:
 
@@ -105,7 +105,7 @@ The **Pictures & tags** tab:
 If a panescape wallpaper is on the desktop, it updates a couple of seconds
 after a change.
 
-![The apply tab](docs/images/gui-apply.png)
+![The apply tab](https://raw.githubusercontent.com/keo99/panescape/main/docs/images/gui-apply.png)
 
 The **Apply** tab:
 
@@ -124,7 +124,7 @@ The **Apply** tab:
   when your config already has it. It also lets you choose the wallpaper tool
   (`setter`).
 
-![The Unsplash tab (sample results)](docs/images/gui-unsplash.png)
+![The Unsplash tab (sample results)](https://raw.githubusercontent.com/keo99/panescape/main/docs/images/gui-unsplash.png)
 
 The **Unsplash** tab finds new pictures (the screenshot shows made-up sample
 results):
@@ -187,7 +187,7 @@ backgrounds/<config>/<image>/
 ```
 
 Commands run in the current folder. Point them elsewhere with `--root DIR` or
-`PANESCAPE_ROOT`. Examples are in [`examples/`](examples/).
+`PANESCAPE_ROOT`. Examples are in [`examples/`](https://github.com/keo99/panescape/tree/main/examples/).
 
 ## Usage
 
@@ -296,7 +296,7 @@ don't go round in a circle.
 | Above or below | `below: NAME` or `above: NAME`, plus `gap` (vertical) and `h_pos` / `h_align` (horizontal offset from NAME, or `h_ref`) |
 | Anything else | `position: [x, y]`, the housing's top-left in mm |
 
-A 2×2 grid ([full example](examples/configurations/grid-2x2.yml)):
+A 2×2 grid ([full example](https://github.com/keo99/panescape/blob/main/examples/configurations/grid-2x2.yml)):
 
 ```yaml
 monitors:
@@ -316,8 +316,8 @@ monitors:
     v_align: top
 ```
 
-Other examples: [a laptop under a monitor](examples/configurations/laptop-under-monitor.yml),
-[portrait-landscape-portrait](examples/configurations/portrait-landscape-portrait.yml).
+Other examples: [a laptop under a monitor](https://github.com/keo99/panescape/blob/main/examples/configurations/laptop-under-monitor.yml),
+[portrait-landscape-portrait](https://github.com/keo99/panescape/blob/main/examples/configurations/portrait-landscape-portrait.yml).
 
 `panescape detect --write NAME` writes this structure for you from the desktop's
 arrangement (rows, stacks and grids), with the measured numbers left at 0. When
@@ -566,6 +566,12 @@ pytest                       # GUI tests run headless (QT_QPA_PLATFORM=offscreen
 ruff check .
 python docs/make_images.py   # rebuild the README images and the window screenshots
 ```
+
+The latest unreleased version: `pipx install 'panescape[gui] @ git+https://github.com/keo99/panescape'`.
+
+**Releasing:** set `__version__` in `src/panescape/__init__.py`, commit, then
+`git tag v0.1.0 && git push origin main v0.1.0`. The release workflow checks
+that the tag matches the version, runs the tests, and publishes to PyPI.
 
 ## Credits
 

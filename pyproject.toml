@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "panescape"
-version = "0.1.0"
+dynamic = ["version"]
 description = "True-to-scale wallpapers across monitors of different sizes, resolutions and orientations (Linux: GNOME, KDE Plasma, sway, Hyprland)"
 readme = "README.md"
 license = "MIT"
@@ -35,6 +35,9 @@ panescape-apply = "panescape.cli:main_apply"
 
 [project.gui-scripts]
 panescape-gui = "panescape.gui:run"
+
+[tool.setuptools.dynamic]
+version = { attr = "panescape.__version__" }
 
 [tool.setuptools.packages.find]
 where = ["src"]
