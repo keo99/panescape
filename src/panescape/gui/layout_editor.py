@@ -460,12 +460,12 @@ def _is_number(text: str) -> bool:
 # =========================================================================== dialogs
 
 class NewConfigDialog(QDialog):
-    def __init__(self, parent, existing: list[str], current: str | None, can_detect: bool):
+    def __init__(self, parent, existing: list[str], current: str | None, can_detect: bool, suggested: str = ""):
         super().__init__(parent)
         self.setWindowTitle("New layout")
         lay = QVBoxLayout(self)
         f = QFormLayout()
-        self.name = QLineEdit()
+        self.name = QLineEdit(suggested if suggested not in existing else "")
         self.name.setPlaceholderText("e.g. home_desk")
         f.addRow("Name", self.name)
         lay.addLayout(f)
@@ -730,7 +730,13 @@ class LayoutEditor(QWidget):
         if not self.maybe_save():
             return
         be = self.backend()
-        dlg = NewConfigDialog(self, self.project.config_names(), self.name, be is not None)
+        wanted = ""
+        if not self.project.config_names():  # the first layout gets the name setup.yml already uses
+            try:
+                wanted = str(self.project.load_setup().get("configuration") or "")
+            except ProjectError:
+                pass
+        dlg = NewConfigDialog(self, self.project.config_names(), self.name, be is not None, Path(wanted).stem)
         if dlg.exec() != QDialog.Accepted:
             return
         name = dlg.name.text().strip()
@@ -1014,7 +1020,9 @@ class LayoutEditor(QWidget):
             self._last_good = self.layout_
         else:
             self.desk.set_layout(getattr(self, "_last_good", None), valid=False,
-                                 error=err or "no monitors")
+                                 error=err or ("No monitors yet." if self.path else
+                                               "No layout yet.\n\nPress New… to make one from the monitors "
+                                               "connected now, then measure the gaps and bezels."))
         self.desk.set_selected(self.sel)
         self._error = err
         self._show_problems()

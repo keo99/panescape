@@ -6,6 +6,7 @@ desktop until Apply is pressed (or the Pictures tab updates a running wallpaper)
 
 from __future__ import annotations
 
+import html
 import os
 import shlex
 import signal
@@ -539,7 +540,9 @@ class ApplyTab(QWidget):
         try:
             ev = self.project.evaluate_rule({"source": "setup"}, strict=False)
         except (ProjectError, ValueError, OSError) as e:
-            self.summary.setText(f"<span style='color:{RED}'>{e}</span>")
+            msg = ("No layout yet: make one in the Layout tab (1. Describe your monitors)."
+                   if not self.project.config_names() else html.escape(str(e)))
+            self.summary.setText(f"<span style='color:{RED}'>{msg}</span>")
             self.strip.clear()
             self.apply_btn.setEnabled(False)
             return

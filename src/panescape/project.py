@@ -306,7 +306,8 @@ class Project:
                          self.configurations / f"{p}.yaml"):
                 if cand.is_file():
                     return cand
-            raise ProjectError(f"configuration {name!r} not found in {self.configurations}")
+            raise ProjectError(f"there is no layout called {name!r} yet "
+                               f"(looked for configurations/{p.name}.yml)")
         setup_name = self.load_setup().get("configuration")
         if setup_name:
             return self.config_path(str(setup_name))

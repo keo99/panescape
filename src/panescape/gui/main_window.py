@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QFileSystemWatcher, QSettings
+from PySide6.QtCore import QFileSystemWatcher, QSettings, QTimer
 from PySide6.QtWidgets import (
     QComboBox,
     QHBoxLayout,
@@ -60,6 +60,11 @@ class MainWindow(QMainWindow):
         self.warning.setVisible(bool(warnings))
         root.addWidget(self.warning)
 
+        from .getting_started import GettingStarted
+        self.guide = GettingStarted(project)
+        self.guide.step_clicked.connect(self.go_to_step)
+        root.addWidget(self.guide)
+
         self.tabs = QTabWidget()
         self.layout_editor = LayoutEditor(project)
         self.layout_editor.message.connect(lambda m: self.statusBar().showMessage(m, 8000))
@@ -91,6 +96,9 @@ class MainWindow(QMainWindow):
 
         self.refresh_setups()
         self.layout_editor.show_config(self._setup_config())
+        self._guide_timer = QTimer(self)  # picks up pictures added or an apply made anywhere
+        self._guide_timer.timeout.connect(lambda: self.guide.isVisible() and self.guide.refresh())
+        self._guide_timer.start(2000)
         s = QSettings()
         if s.value("geometry"):
             self.restoreGeometry(s.value("geometry"))
@@ -207,7 +215,20 @@ class MainWindow(QMainWindow):
         self.pictures_tab.refresh()
         self.apply_tab.update_preview()
 
+    def go_to_step(self, step: str) -> None:
+        if step == "monitors":
+            self.tabs.setCurrentWidget(self.layout_editor)
+            if not self.project.config_names():
+                self.layout_editor.new_config()
+        elif step == "pictures":
+            self.tabs.setCurrentWidget(self.pictures_tab)
+        else:
+            self.tabs.setCurrentWidget(self.apply_tab)
+        self.guide.refresh()
+
     def _tab_changed(self, _i) -> None:
+        if self.guide.isVisible():
+            self.guide.refresh()
         if self.tabs.currentWidget() is self.pictures_tab:
             self.pictures_tab.refresh_layout()  # the layout may have been edited / saved
         elif self.tabs.currentWidget() is self.unsplash_tab:

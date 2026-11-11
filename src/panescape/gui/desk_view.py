@@ -140,7 +140,8 @@ class DeskView(QWidget):
         t = self._transform()
         if not t:
             qp.setPen(MUTED)
-            qp.drawText(self.rect(), Qt.AlignCenter, self.error or "No monitors")
+            qp.drawText(self.rect().adjusted(20, 20, -20, -20), Qt.AlignCenter | Qt.TextWordWrap,
+                        self.error or "No monitors")
             return
         k = t[0]
         lay = self.layout_

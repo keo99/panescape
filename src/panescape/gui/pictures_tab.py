@@ -64,6 +64,17 @@ class PictureGrid(QListWidget):
         self.setAcceptDrops(True)
         self.viewport().setAcceptDrops(True)
 
+    def paintEvent(self, e):
+        super().paintEvent(e)
+        if self.count() == 0:
+            from PySide6.QtGui import QPainter
+            p = QPainter(self.viewport())
+            p.setPen(self.palette().placeholderText().color())
+            p.drawText(self.viewport().rect().adjusted(30, 30, -30, -30), Qt.AlignCenter | Qt.TextWordWrap,
+                       "No pictures yet.\n\nDrop pictures here, press Add pictures…, "
+                       "or find some in the Unsplash tab.\n\nWide landscape photos suit a row of monitors best.")
+            p.end()
+
     def _files(self, e) -> list[str]:
         if not e.mimeData().hasUrls():
             return []
@@ -308,7 +319,9 @@ class PicturesTab(QWidget):
             self.layout_ = compute_layout(self.cfg)
         except Exception as e:  # noqa: BLE001
             self.cfg, self.layout_ = None, None
-            self.desk.set_layout(None, valid=False, error=f"No usable layout: {e}")
+            msg = ("No layout yet: make one in the Layout tab to see how pictures fit your desk."
+                   if not self.project.config_names() else f"No usable layout: {e}")
+            self.desk.set_layout(None, valid=False, error=msg)
         else:
             self.desk.set_layout(self.layout_)
         self.use_filter.setText(f"Use for setup “{self.project.active_setup() or 'default'}”")
