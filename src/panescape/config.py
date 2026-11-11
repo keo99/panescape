@@ -8,9 +8,7 @@ import math
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
-import yaml
-
-from . import models
+from . import models, yamledit
 from .units import parse_length, parse_resolution
 
 ROTATIONS = {
@@ -279,8 +277,7 @@ def _monitor_from_entry(i: int, entry: dict, defaults: dict) -> Monitor:
 
 def load_configuration(path: str | Path) -> Configuration:
     path = Path(path)
-    with open(path) as f:
-        raw = yaml.safe_load(f) or {}
+    raw = yamledit.safe_load(path) or {}
     return configuration_from_dict(raw, name=raw.get("name") or path.stem, path=path)
 
 

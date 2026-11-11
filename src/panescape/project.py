@@ -12,10 +12,9 @@ from contextlib import contextmanager
 from dataclasses import dataclass, field
 from pathlib import Path
 
-import yaml
 from PIL import Image
 
-from . import __version__
+from . import __version__, yamledit
 from .config import Configuration, load_configuration
 from .layout import Layout, compute_layout
 from .render import UPSCALE_WARN, CropSpec, Mapping, load_image, render_preview, save_image
@@ -107,8 +106,7 @@ class Project:
     def _setup_doc(self) -> dict:
         if not self.setup_file.exists():
             return {}
-        with open(self.setup_file) as f:
-            doc = yaml.safe_load(f) or {}
+        doc = yamledit.safe_load(self.setup_file) or {}
         if not isinstance(doc, dict):
             raise ProjectError(f"{self.setup_file.name} must be a mapping")
         return doc
@@ -145,7 +143,6 @@ class Project:
         """setup.yml as an editable round-trip document, always in the named form."""
         from ruamel.yaml.comments import CommentedMap
 
-        from . import yamledit
         doc = yamledit.load(self.setup_file)
         if isinstance(doc.get("setups"), dict):
             return doc
@@ -156,7 +153,6 @@ class Project:
         return new
 
     def _save_setup_rt(self, doc) -> None:
-        from . import yamledit
         setups = doc["setups"]
         if len(setups) == 1 and DEFAULT_SETUP in setups and set(doc) <= {"active", "setups"}:
             only = setups[DEFAULT_SETUP]  # back to the simple form
@@ -267,7 +263,7 @@ class Project:
         if path.exists() and not overwrite:
             raise ProjectError(f"{path} exists (use --overwrite)")
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(DETECTED_HEADER + yaml.safe_dump(config_skeleton(os_monitors, name), sort_keys=False))
+        path.write_text(DETECTED_HEADER + yamledit.safe_dump(config_skeleton(os_monitors, name)), encoding="utf-8")
         return path
 
     def rename_config(self, old: str, new: str) -> Path:
@@ -418,8 +414,7 @@ class Project:
         except FileNotFoundError:
             return {}
         if getattr(self, "_crops_cache", (None,))[0] != mtime:
-            with open(self.crops_file) as f:
-                raw = yaml.safe_load(f) or {}
+            raw = yamledit.safe_load(self.crops_file) or {}
             if not isinstance(raw, dict):
                 raise ProjectError(f"{self.crops_file} must map picture names to crop settings")
             self._crops_cache = (mtime, {str(k): dict(v or {}) for k, v in raw.items()})
@@ -429,7 +424,6 @@ class Project:
         """Save (or with None / {} remove) a picture's crop settings, keeping comments."""
         from ruamel.yaml.comments import CommentedMap, CommentedSeq
 
-        from . import yamledit
         doc = yamledit.load(self.crops_file)
         if not doc and not self.crops_file.exists():
             doc.yaml_set_start_comment(

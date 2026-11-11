@@ -46,13 +46,13 @@ def fake_backend(layout, applied: list):
 
 
 def make_project(tmp_path: Path, names=("a", "b", "c")):
-    import yaml
     from PIL import Image
 
+    from panescape import yamledit
     from panescape.project import Project
     (tmp_path / "pictures").mkdir()
     (tmp_path / "configurations").mkdir()
-    (tmp_path / "configurations" / "desk.yml").write_text(yaml.safe_dump(DESK))
+    (tmp_path / "configurations" / "desk.yml").write_text(yamledit.safe_dump(DESK))
     colours = ["red", "blue", "green", "white", "yellow"]
     for n, col in zip(names, colours[: len(names)], strict=True):
         Image.new("RGB", (1200, 600), col).save(tmp_path / "pictures" / f"{n}.png")

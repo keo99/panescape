@@ -99,8 +99,9 @@ def test_continuity_keeps_current_image():
 def test_cache_follows_geometry_not_config_text(tmp_path):
     import copy
 
-    import yaml
     from helpers import DESK
+
+    from panescape import yamledit
 
     proj = make_project(tmp_path, names=("a",))
     cfg_path = tmp_path / "configurations" / "desk.yml"
@@ -112,12 +113,12 @@ def test_cache_follows_geometry_not_config_text(tmp_path):
     # a serial number can't change the picture: nothing is re-rendered
     desk = copy.deepcopy(DESK)
     desk["monitors"][1]["serial"] = "XYZ"
-    cfg_path.write_text(yaml.safe_dump(desk))
+    cfg_path.write_text(yamledit.safe_dump(desk))
     assert proj.render(proj.load_config(None), job).skipped
 
     # moving the centre screen inside the desk outline re-renders only that screen
     desk["monitors"][1]["v_pos"] = -25
-    cfg_path.write_text(yaml.safe_dump(desk))
+    cfg_path.write_text(yamledit.safe_dump(desk))
     r = proj.render(proj.load_config(None), job)
     assert not r.skipped
     changed = {n for n, p in r.slices.items() if p.stat().st_mtime_ns != stamps[n]}

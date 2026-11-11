@@ -23,9 +23,7 @@ import sys
 import time
 from pathlib import Path
 
-import yaml
-
-from . import __version__, backends, models
+from . import __version__, backends, models, yamledit
 from .config import ROTATION_NAMES, ConfigError
 from .project import RESTORE_FILE, Project, ProjectError
 from .units import parse_duration
@@ -321,7 +319,7 @@ def cmd_calibrate(args) -> None:
             last = now
             try:
                 build()
-            except (ConfigError, ProjectError, ValueError, yaml.YAMLError) as e:
+            except (ConfigError, ProjectError, ValueError, yamledit.YAMLError) as e:
                 print(f"  config error, not applied: {e}")
     except KeyboardInterrupt:
         print()

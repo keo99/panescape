@@ -20,7 +20,7 @@ import fnmatch
 import re
 from pathlib import Path
 
-import yaml
+from . import yamledit
 
 _TOKEN = re.compile(r"\s*(\(|\)|!|&|\+|\||,|[^\s()!&+|,]+)")
 
@@ -36,8 +36,7 @@ def norm_tag(t) -> str:
 def load_tags(path: Path) -> dict[str, set[str]]:
     if not path.exists():
         return {}
-    with open(path) as f:
-        raw = yaml.safe_load(f) or {}
+    raw = yamledit.safe_load(path) or {}
     if not isinstance(raw, dict):
         raise FilterError(f"{path} must map image names to tag lists")
     out = {}
@@ -52,7 +51,7 @@ def save_tags(path: Path, tags: dict[str, set[str]]) -> None:
     data = {k: sorted(v) for k, v in sorted(tags.items()) if v}
     header = ("# Image tags for panescape. Keys are file names in this folder (globs allowed).\n"
               "# Filter in setup.yml with e.g.  filter: landscape + water + !mountains\n")
-    path.write_text(header + yaml.safe_dump(data, sort_keys=False, default_flow_style=None, width=100))
+    path.write_text(header + yamledit.safe_dump(data, flow_lists=True, width=100), encoding="utf-8")
 
 
 def tags_for(name: str, tags: dict[str, set[str]]) -> set[str]:
@@ -140,7 +139,6 @@ TAGS_HEADER = ("Image tags for panescape. Keys are file names in this folder (gl
 
 
 def _load_rt(path: Path):
-    from . import yamledit
     doc = yamledit.load(path)
     if not doc and not path.exists():
         doc.yaml_set_start_comment(TAGS_HEADER)
@@ -166,7 +164,6 @@ def edit_tags(path: Path, changes: dict[str, tuple[set[str], set[str]]]) -> list
     Returns warnings for tags that can't be removed from an image because a
     glob entry (e.g. ``"city-*"``) gives them to it.
     """
-    from . import yamledit
     doc = _load_rt(path)
     warnings = []
     for name, (add, remove) in changes.items():
@@ -191,7 +188,6 @@ def edit_tags(path: Path, changes: dict[str, tuple[set[str], set[str]]]) -> list
 
 def rename_tag(path: Path, old: str, new: str) -> int:
     """Rename (or, if ``new`` exists, merge into) a tag everywhere. Returns entries changed."""
-    from . import yamledit
     old, new = norm_tag(old), norm_tag(new)
     doc = _load_rt(path)
     n = 0

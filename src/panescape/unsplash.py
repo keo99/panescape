@@ -433,10 +433,10 @@ def credits_file(project) -> Path:
 
 
 def load_credits(project) -> dict[str, dict]:
-    import yaml
+    from . import yamledit
     try:
-        data = yaml.safe_load(credits_file(project).read_text()) or {}
-    except (OSError, yaml.YAMLError):
+        data = yamledit.safe_load(credits_file(project)) or {}
+    except (OSError, yamledit.YAMLError):
         return {}
     return {str(k): v for k, v in data.items() if isinstance(v, dict)} if isinstance(data, dict) else {}
 
