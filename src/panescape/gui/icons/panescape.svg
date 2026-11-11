@@ -1,0 +1,37 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <!-- panescape: three monitors of different sizes as panes onto one picture -->
+  <defs>
+    <linearGradient id="sky" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#3f7fd0"/>
+      <stop offset="1" stop-color="#bfe0f5"/>
+    </linearGradient>
+    <linearGradient id="far" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#7a8fb0"/>
+      <stop offset="1" stop-color="#9fb2cc"/>
+    </linearGradient>
+    <clipPath id="screens">
+      <rect x="26" y="52" width="56" height="112" rx="2"/>
+      <rect x="98" y="104" width="60" height="52" rx="2"/>
+      <rect x="174" y="52" width="56" height="112" rx="2"/>
+    </clipPath>
+  </defs>
+  <!-- housings -->
+  <rect x="18" y="44" width="72" height="128" rx="9" fill="#26262a" stroke="#6a6a74" stroke-width="2"/>
+  <rect x="90" y="96" width="76" height="68" rx="9" fill="#26262a" stroke="#6a6a74" stroke-width="2"/>
+  <rect x="166" y="44" width="72" height="128" rx="9" fill="#26262a" stroke="#6a6a74" stroke-width="2"/>
+  <!-- one scene, seen through the three screens -->
+  <g clip-path="url(#screens)">
+    <rect x="0" y="40" width="256" height="140" fill="url(#sky)"/>
+    <circle cx="200" cy="82" r="11" fill="#fff6d6"/>
+    <path d="M0 140 L40 96 L62 116 L104 70 L134 104 L160 88 L206 124 L230 106 L256 122 L256 180 L0 180 Z" fill="url(#far)"/>
+    <path d="M104 70 L92 84 L100 82 L106 88 L112 80 L118 86 Z" fill="#ffffff"/>
+    <path d="M40 96 L32 105 L39 103 L44 108 L50 103 Z" fill="#ffffff"/>
+    <path d="M0 150 L48 128 L96 146 L150 124 L206 146 L256 134 L256 180 L0 180 Z" fill="#2f6b4f"/>
+    <path d="M0 166 L80 152 L150 160 L210 150 L256 158 L256 180 L0 180 Z" fill="#eef3f6"/>
+  </g>
+  <!-- stands -->
+  <rect x="50" y="172" width="8" height="22" fill="#3a3a40"/>
+  <rect x="124" y="164" width="8" height="30" fill="#3a3a40"/>
+  <rect x="198" y="172" width="8" height="22" fill="#3a3a40"/>
+  <rect x="30" y="194" width="196" height="8" rx="4" fill="#3a3a40"/>
+</svg>

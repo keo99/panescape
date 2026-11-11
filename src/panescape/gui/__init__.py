@@ -46,6 +46,13 @@ def main(root: str | Path | None = None) -> int:
     app.setApplicationName("panescape")
     app.setOrganizationName("panescape")
     app.setDesktopFileName("panescape")
+    from .. import launcher
+    from .common import app_icon
+    app.setWindowIcon(app_icon())
+    try:
+        launcher.refresh_if_installed()
+    except OSError:
+        pass
     root = Path(root) if root else _find_root(None)
     if root is None:
         return 0

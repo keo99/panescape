@@ -73,3 +73,24 @@ def confirm(parent: QWidget, title: str, text: str, ok: str = "OK") -> bool:
     box.addButton(QMessageBox.Cancel)
     box.exec()
     return box.clickedButton() is yes
+
+
+def app_icon():
+    """panescape's icon, drawn from the bundled SVG (needs no Qt image plugins)."""
+    from PySide6.QtCore import QRectF
+    from PySide6.QtGui import QIcon, QPainter, QPixmap
+    from PySide6.QtSvg import QSvgRenderer
+
+    from ..launcher import icon_source
+    renderer = QSvgRenderer(str(icon_source()))
+    icon = QIcon()
+    if not renderer.isValid():
+        return icon
+    for size in (16, 24, 32, 48, 64, 128, 256):
+        pm = QPixmap(size, size)
+        pm.fill(Qt.transparent)
+        p = QPainter(pm)
+        renderer.render(p, QRectF(0, 0, size, size))
+        p.end()
+        icon.addPixmap(pm)
+    return icon

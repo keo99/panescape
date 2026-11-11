@@ -1,4 +1,4 @@
-"""Keep every test away from the real keyring, config and Unsplash key."""
+"""Keep every test away from the real keyring, config, app menu and Unsplash key."""
 
 import os
 import sys
@@ -13,6 +13,7 @@ def _private_dirs(tmp_path_factory, monkeypatch):
     monkeypatch.delenv("PANESCAPE_UNSPLASH_KEY", raising=False)
     monkeypatch.setenv("XDG_CONFIG_HOME", str(home / "config"))
     monkeypatch.setenv("XDG_CACHE_HOME", str(home / "cache"))
+    monkeypatch.setenv("XDG_DATA_HOME", str(home / "data"))
 
 
 @pytest.hookimpl(trylast=True)

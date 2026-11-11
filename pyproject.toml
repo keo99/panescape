@@ -43,7 +43,7 @@ version = { attr = "panescape.__version__" }
 where = ["src"]
 
 [tool.setuptools.package-data]
-panescape = ["py.typed"]
+panescape = ["py.typed", "gui/icons/*.svg"]
 
 [tool.ruff]
 line-length = 120

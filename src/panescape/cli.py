@@ -192,6 +192,14 @@ def cmd_setup(args) -> None:
 
 
 def cmd_gui(args) -> None:
+    if args.install_launcher or args.remove_launcher:
+        from . import launcher
+        if args.install_launcher:
+            print(f"added panescape to the app menu: {launcher.install()}")
+        else:
+            gone = launcher.remove()
+            print("removed " + ", ".join(map(str, gone)) if gone else "no app-menu entry to remove")
+        return
     try:
         from .gui import main as gui_main
     except ImportError as e:
@@ -447,6 +455,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.set_defaults(func=cmd_setup)
 
     s = sub.add_parser("gui", help="open the panescape window (needs: pip install 'panescape[gui]')")
+    g = s.add_mutually_exclusive_group()
+    g.add_argument("--install-launcher", action="store_true", help="add panescape to your app menu, with its icon")
+    g.add_argument("--remove-launcher", action="store_true", help="remove the app-menu entry and icon")
     s.set_defaults(func=cmd_gui)
 
     s = sub.add_parser("sync", help="re-check the applied selection (tags, pictures, setup.yml) and update")
