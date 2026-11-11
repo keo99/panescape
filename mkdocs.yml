@@ -41,14 +41,14 @@ nav:
   - Home: index.md
   - Start:
       - Installing: install.md
-      - Getting started: getting-started.md
+      - Getting Started: getting-started.md
   - Using panescape:
-      - The window: window.md
+      - The Window: window.md
       - Unsplash: unsplash.md
-      - Command line: cli.md
-      - Setups and slideshows: setups.md
-      - Pictures, tags and framing: pictures.md
-  - Your desk:
+      - Command Line: cli.md
+      - Setups and Slideshows: setups.md
+      - Pictures, Tags and Framing: pictures.md
+  - Your Desk:
       - Configuration: configuration.md
       - Layouts: layouts.md
       - Calibrating: calibrating.md

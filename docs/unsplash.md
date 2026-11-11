@@ -6,7 +6,7 @@ The **Unsplash** tab finds new pictures for your desk.
 
 The screenshot shows made-up sample results.
 
-## Finding and downloading photos
+## Finding and Downloading Photos
 
 - **Search** Unsplash (landscape photos by default, since they suit a wide
   desk), or press **Suggest for me** for photos like the ones you have, based
@@ -19,7 +19,7 @@ The screenshot shows made-up sample results.
   minus generic ones like "hd wallpapers", and the credit goes in
   `pictures/credits.yml`. The Pictures tab then shows "Photo by … on Unsplash".
 
-## Your Unsplash access key
+## Your Unsplash Access Key
 
 Searching needs a free key of your own:
 
@@ -27,7 +27,7 @@ Searching needs a free key of your own:
    and create a **New Application** (any name, e.g. *my panescape*).
 2. Copy its **Access Key** (not the Secret key) and paste it into the tab.
 
-## Requests and the hourly limit
+## Requests and the Hourly Limit
 
 A new key allows 50 requests an hour. The tab shows how many are left.
 
@@ -44,7 +44,7 @@ Search results don't include Unsplash's tags, which is why getting them costs
 an extra request. With the box unticked, a picture is tagged from your search
 words and the photo's description instead.
 
-## How panescape looks after the key
+## How panescape Looks After the Key
 
 - **Checked before it's saved:** panescape makes one request with the key
   first, and stores it only if Unsplash accepts it.
@@ -60,7 +60,7 @@ words and the photo's description instead.
 - **Removing it:** **Remove key** deletes it from the keyring and from the
   file.
 
-## Unsplash's guidelines
+## Unsplash's Guidelines
 
 Following Unsplash's API guidelines, pictures are shown straight from
 Unsplash's own links (never copied into a cache), every download is reported

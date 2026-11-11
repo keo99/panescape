@@ -14,7 +14,7 @@ The dependencies are Pillow, PyYAML and ruamel.yaml, plus PySide6 and
 keyring for the window. Nothing else is needed on GNOME. Other desktops use
 their usual tools; see [Desktops](desktops.md).
 
-## Add it to your app menu
+## Add It to Your App Menu
 
 pipx doesn't add an app-menu entry. Add one, with panescape's icon, from the
 window (**Help ▸ Show panescape in the app menu**) or the command line:
@@ -23,7 +23,7 @@ window (**Help ▸ Show panescape in the app menu**) or the command line:
 panescape gui --install-launcher    # --remove-launcher takes it out again
 ```
 
-## Updating and removing
+## Updating and Removing
 
 ```bash
 pipx upgrade panescape
@@ -33,7 +33,7 @@ pipx uninstall panescape     # run `panescape gui --remove-launcher` first if yo
 Your project folder (pictures, layouts, `setup.yml`) is never touched by
 installing or removing panescape.
 
-## The latest development version
+## The Latest Development Version
 
 ```bash
 pipx install 'panescape[gui] @ git+https://github.com/keo99/panescape'

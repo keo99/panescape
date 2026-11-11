@@ -1,4 +1,4 @@
-# Command line
+# Command Line
 
 Every command works on a project folder: the current folder, or the one given
 with `--root DIR` or `PANESCAPE_ROOT`. `panescape COMMAND --help` lists every
@@ -29,7 +29,7 @@ pick a configuration, and `--force` to re-render. For the best result, use a
 source image at least as many pixels wide as your desk needs. `make` warns
 when a screen would be enlarged.
 
-## The project folder
+## The Project Folder
 
 ```
 pictures/                     your source images (+ tags.yml, crops.yml, credits.yml)

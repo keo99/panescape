@@ -1,10 +1,10 @@
-# Pictures, tags and framing
+# Pictures, Tags and Framing
 
 Put your pictures in the project's `pictures/` folder (the window's **Add
 pictures…** copies them there). panescape never changes them: it writes its
 results to `backgrounds/`.
 
-## Tags and filters
+## Tags and Filters
 
 Tags live in `pictures/tags.yml`. You can edit the file by hand or use the CLI:
 
@@ -36,7 +36,7 @@ Tags are case-insensitive, untagged images match `!x`, and `!*` matches
 pictures with no tags at all. Comments you add to `tags.yml` are kept when the
 command line or the window edits it.
 
-## Framing a picture
+## Framing a Picture
 
 By default each picture is centred and scaled to fill the desk. To frame one
 differently, drag it in the window's Pictures tab, or write it in

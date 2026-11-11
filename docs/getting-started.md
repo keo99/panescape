@@ -1,10 +1,10 @@
-# Getting started
+# Getting Started
 
 Everything panescape knows lives in one **project folder**, `~/panescape` for
 example: your pictures, a layout for each desk you use, and `setup.yml`, which
-says what to put on the desktop. See [The project folder](cli.md#the-project-folder).
+says what to put on the desktop. See [The Project Folder](cli.md#the-project-folder).
 
-## In the window
+## In the Window
 
 Run `panescape-gui`. The first time, it asks for a folder and sets it up. A
 **Getting started** strip at the top then walks you through three steps.
@@ -25,9 +25,9 @@ Run `panescape-gui`. The first time, it asks for a folder and sets it up. A
 
 ![The layout editor](images/gui-layout.png)
 
-More on each tab: [The window](window.md).
+More on each tab: [The Window](window.md).
 
-## On the command line
+## On the Command Line
 
 ```bash
 mkdir ~/panescape && cd ~/panescape
@@ -46,13 +46,13 @@ photo that was used:
 ![Preview of the example desk](images/preview.jpg)
 
 Next: [Configuration](configuration.md) for every layout setting, and
-[Setups and slideshows](setups.md) for what `apply` puts on the desktop.
+[Setups and Slideshows](setups.md) for what `apply` puts on the desktop.
 
-## Getting the most out of it
+## Getting the Most Out of It
 
 - **Measure, don't guess.** Use the monitor's `model` (or its exact lit area)
   and measure the bezels with a ruler; see the
-  [precision tips](configuration.md#precision-tips).
+  [Precision Tips](configuration.md#precision-tips).
 - **Use big pictures.** For a sharp result, a picture should be at least as
   many pixels wide as your desk needs. panescape warns when a screen would
   show it enlarged.

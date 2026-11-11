@@ -18,9 +18,9 @@ pipx install 'panescape[gui]'
 panescape-gui
 ```
 
-Then follow [Getting started](getting-started.md).
+Then follow [Getting Started](getting-started.md).
 
-## What it does
+## What It Does
 
 - **Measures in millimetres:** a layout describes your real desk: each screen's
   model or size, its bezels, the gaps between screens and how high each one sits.
@@ -30,13 +30,13 @@ Then follow [Getting started](getting-started.md).
   ([Calibrating](calibrating.md)).
 - **Slideshows that stay in step:** every screen changes at the same moment,
   chosen by tags and filters such as `landscape + water + !night`
-  ([Setups and slideshows](setups.md), [Pictures](pictures.md)).
+  ([Setups and Slideshows](setups.md), [Pictures](pictures.md)).
 - **A window and a command line** that edit the same files, keeping your
-  comments ([The window](window.md), [Command line](cli.md)).
+  comments ([The Window](window.md), [Command Line](cli.md)).
 - **Unsplash search** with suggestions based on your tags, and credits kept
   for every photo ([Unsplash](unsplash.md)).
 
-## Supported desktops
+## Supported Desktops
 
 | desktop | how panescape applies the wallpaper | tested with |
 |---|---|---|
@@ -48,7 +48,7 @@ Then follow [Getting started](getting-started.md).
 
 Details for each are on the [Desktops](desktops.md) page.
 
-## Why not HydraPaper or a "spanned" wallpaper?
+## Why Not HydraPaper or a "Spanned" Wallpaper?
 
 Those work too. You give them one image per monitor, or one image stretched over
 the desktop, and they place it in pixel space. panescape decides *what each

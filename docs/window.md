@@ -1,4 +1,4 @@
-# The window
+# The Window
 
 ```bash
 pipx install 'panescape[gui]'
@@ -9,7 +9,7 @@ The window edits the same files as the [command line](cli.md), keeping your
 comments, so you can switch between the two whenever you like. Click a
 screenshot to see it full size.
 
-## The top bar
+## The Top Bar
 
 - **Setup** (top bar): choose which [setup](setups.md) is active, or create,
   rename and delete setups.
@@ -35,7 +35,7 @@ Close it with ✕, and bring it back with **Help ▸ Getting started**.
   real monitors and redraws it as you drag or type. Your wallpaper comes back
   when you switch it off or close the window.
 
-## Pictures & tags
+## Pictures & Tags
 
 [![The pictures and tags tab](images/gui-pictures.png)](images/gui-pictures.png)
 
@@ -81,7 +81,7 @@ after a change.
 The Unsplash tab searches Unsplash and suggests photos like the ones you have.
 It has [its own page](unsplash.md).
 
-## Menus and shortcuts
+## Menus and Shortcuts
 
 | menu | what's there |
 |---|---|

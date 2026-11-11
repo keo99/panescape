@@ -8,7 +8,7 @@ covered in [Layouts](layouts.md).
 name: desk_H
 monitors:
   - name: left
-    model: Samsung U28E590      # built-in specs (see [Adding a monitor model](development.md#adding-a-monitor-model))
+    model: Samsung U28E590      # built-in specs (see [Adding a Monitor Model](development.md#adding-a-monitor-model))
     serial: ABC1234567          # pin to a physical screen (from `panescape detect`)
     rotation: portrait-right    # landscape | portrait-right | portrait-left | landscape-flipped
     bezel: {left: 24, right: 16, top: 20, bottom: 20}   # measured, as mounted
@@ -55,7 +55,7 @@ Every monitor key:
 
 `defaults:` at the top level sets `gap`, `bezel`, `v_align` or `h_align` for every monitor.
 
-## Precision tips
+## Precision Tips
 
 1. Use `model` or `active_area`. Nominal diagonals are rounded, and a "28 inch"
    panel is not exactly 28 inches.

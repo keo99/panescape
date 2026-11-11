@@ -71,7 +71,7 @@ It picks up `apply`, `add`, `sync` and `tag` changes by itself and pauses while
 `panescape status` shows whether it's running. Everything else (`calibrate`,
 `detect`, tags, rules) works the same as on GNOME.
 
-## Other desktops
+## Other Desktops
 
 `backgrounds/<config>/<image>/N_name.png` are plain per-monitor images that you
 can set with any tool, for example `feh`, Cinnamon or HydraPaper. Backends

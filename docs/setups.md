@@ -1,4 +1,4 @@
-# Setups and slideshows
+# Setups and Slideshows
 
 `setup.yml` says what goes on the desktop: which layout, which pictures, and
 whether it's one picture or a slideshow. The window's Apply tab edits it for
@@ -17,7 +17,7 @@ shuffle: false
 
 Images that aren't made yet, or have changed, are rendered automatically.
 
-## Several setups
+## Several Setups
 
 `setup.yml` can hold several named setups, for example a calm one for work
 and a colourful one for the evening:
@@ -42,7 +42,7 @@ Switch with `panescape setup evening` (add `--apply` to apply straight away),
 `default`. Creating a second setup in the window converts the file for you,
 and comments are kept.
 
-## Keeping the slideshow up to date
+## Keeping the Slideshow Up to Date
 
 `apply` saves the **selection rule** (`images`, `filter`, `mode`, …), not just the
 list of files that matched it at the time:

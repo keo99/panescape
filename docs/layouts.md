@@ -1,4 +1,4 @@
-# Layouts: rows, stacks and grids
+# Layouts: Rows, Stacks and Grids
 
 The first monitor is the anchor. Every other monitor is placed relative to
 another one. The order in the file doesn't matter, as long as the references

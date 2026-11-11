@@ -30,16 +30,16 @@ Linux with Python 3.10 or newer. Wallpapers and slideshows are applied on
 panescape makes per-monitor images for your own tool
 ([Desktops](https://keo99.github.io/panescape/desktops/)).
 
-## The window
+## The Window
 
 [![The layout editor](https://raw.githubusercontent.com/keo99/panescape/main/docs/images/gui-layout.png)](https://keo99.github.io/panescape/window/)
 
 Describe your desk to scale, calibrate it on your real screens, tag and frame
 your pictures, find new ones on Unsplash, and apply one picture or a
 slideshow that changes every screen at once. A *Getting started* guide walks
-you through it the first time. See [The window](https://keo99.github.io/panescape/window/).
+you through it the first time. See [The Window](https://keo99.github.io/panescape/window/).
 
-## Quick start on the command line
+## Quick Start on the Command Line
 
 ```bash
 mkdir ~/panescape && cd ~/panescape
@@ -56,8 +56,8 @@ panescape apply
 
 ![Preview of the example desk](https://raw.githubusercontent.com/keo99/panescape/main/docs/images/preview.jpg)
 
-More: [Getting started](https://keo99.github.io/panescape/getting-started/), [Configuration](https://keo99.github.io/panescape/configuration/),
-[Command line](https://keo99.github.io/panescape/cli/).
+More: [Getting Started](https://keo99.github.io/panescape/getting-started/), [Configuration](https://keo99.github.io/panescape/configuration/),
+[Command Line](https://keo99.github.io/panescape/cli/).
 
 ## Contributing
 

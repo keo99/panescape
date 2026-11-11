@@ -7,7 +7,7 @@ ruff check .
 python docs/make_images.py   # rebuild the images and the window screenshots
 ```
 
-## The documentation
+## The Documentation
 
 This site is built with [Material for MkDocs](https://squidfunk.github.io/mkdocs-material/)
 from the `docs/` folder and `mkdocs.yml`, and published to GitHub Pages
@@ -29,7 +29,7 @@ e.g. `git tag v0.2.0 && git push origin main v0.2.0`. The release workflow check
 that the tag matches the version, runs the tests, and publishes to PyPI once
 a maintainer approves the `pypi` deployment.
 
-## Adding a monitor model
+## Adding a Monitor Model
 
 Add an entry to `src/panescape/models.py`, using the spec sheet's active area,
 outer size without stand, and the bezels if you've measured them. Then open a PR.
