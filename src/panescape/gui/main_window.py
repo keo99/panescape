@@ -4,13 +4,16 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from PySide6.QtCore import QFileSystemWatcher, QSettings, QTimer
+from PySide6.QtCore import QFileSystemWatcher, QSettings, Qt, QTimer, QUrl
+from PySide6.QtGui import QDesktopServices, QKeySequence
 from PySide6.QtWidgets import (
     QComboBox,
+    QFileDialog,
     QHBoxLayout,
     QInputDialog,
     QLabel,
     QMainWindow,
+    QMessageBox,
     QPushButton,
     QTabWidget,
     QVBoxLayout,
@@ -20,6 +23,10 @@ from PySide6.QtWidgets import (
 from ..project import Project, ProjectError
 from .common import confirm, error
 from .layout_editor import LayoutEditor
+
+DOCS_URL = "https://github.com/keo99/panescape#readme"
+ISSUES_URL = "https://github.com/keo99/panescape/issues"
+_windows: list = []  # windows opened from File ▸ Open folder (kept alive here)
 
 
 class MainWindow(QMainWindow):
@@ -99,6 +106,7 @@ class MainWindow(QMainWindow):
         self._guide_timer = QTimer(self)  # picks up pictures added or an apply made anywhere
         self._guide_timer.timeout.connect(lambda: self.guide.isVisible() and self.guide.refresh())
         self._guide_timer.start(2000)
+        self._build_menus()
         s = QSettings()
         if s.value("geometry"):
             self.restoreGeometry(s.value("geometry"))
@@ -237,6 +245,94 @@ class MainWindow(QMainWindow):
             self.apply_tab.refresh(force=False)
             self.apply_tab.update_preview()  # tags / pictures may have changed
             self.apply_tab.refresh_runner()
+
+    # ------------------------------------------------------------------ menus
+    def _build_menus(self) -> None:
+        mb = self.menuBar()
+        file = mb.addMenu("&File")
+        file.addAction("&Open folder…", QKeySequence.Open, self.open_folder)
+        file.addAction("Show folder in file &manager", self.show_folder)
+        file.addSeparator()
+        file.addAction("&Quit", QKeySequence("Ctrl+Q"), self.close)
+
+        view = mb.addMenu("&View")
+        for i in range(self.tabs.count()):
+            act = view.addAction(self.tabs.tabText(i),
+                                 QKeySequence(f"Ctrl+{i + 1}"), lambda i=i: self.tabs.setCurrentIndex(i))
+            act.setShortcutContext(Qt.WindowShortcut)
+
+        hlp = mb.addMenu("&Help")
+        hlp.addAction("&Getting started", self.guide.bring_back)
+        hlp.addAction("How to &calibrate", self.layout_editor.show_guide)
+        hlp.addAction("&Documentation (online)", lambda: QDesktopServices.openUrl(QUrl(DOCS_URL)))
+        hlp.addAction("&Report a problem (online)", lambda: QDesktopServices.openUrl(QUrl(ISSUES_URL)))
+        hlp.addSeparator()
+        self.launcher_action = hlp.addAction("Show panescape in the app &menu")
+        self.launcher_action.setCheckable(True)
+        self.launcher_action.toggled.connect(self.set_launcher)
+        hlp.aboutToShow.connect(self._sync_launcher_action)
+        hlp.addSeparator()
+        hlp.addAction("&About panescape", self.about)
+        self.menus = {"File": file, "View": view, "Help": hlp}  # keeps the Python wrappers alive
+
+    def _sync_launcher_action(self) -> None:
+        from .. import launcher
+        self.launcher_action.blockSignals(True)
+        self.launcher_action.setChecked(launcher.installed())
+        self.launcher_action.blockSignals(False)
+
+    def set_launcher(self, on: bool) -> None:
+        from .. import launcher
+        try:
+            if on:
+                launcher.install()
+                self.statusBar().showMessage("panescape is in your app menu now (it may take a moment to appear)",
+                                             8000)
+            else:
+                launcher.remove()
+                self.statusBar().showMessage("removed panescape from the app menu", 8000)
+        except OSError as e:
+            error(self, "App menu", str(e))
+        self._sync_launcher_action()
+
+    def show_folder(self) -> None:
+        QDesktopServices.openUrl(QUrl.fromLocalFile(str(self.project.root)))
+
+    def open_folder(self) -> None:
+        """Switch to another panescape folder (or make a new one) in a fresh window."""
+        from . import _is_project, prepare_project
+        chosen = QFileDialog.getExistingDirectory(self, "Open a panescape folder", str(self.project.root.parent))
+        if not chosen:
+            return
+        root = Path(chosen).resolve()
+        if root == self.project.root:
+            return
+        if not _is_project(root) and not confirm(
+                self, "New panescape folder",
+                f"{root} isn't a panescape folder yet. Make it one?\n\n"
+                "This adds pictures/, configurations/, backgrounds/ and setup.yml to it."):
+            return
+        if not self.layout_editor.maybe_save():
+            return
+        try:
+            project = prepare_project(root)
+        except OSError as e:
+            error(self, "Open folder", str(e))
+            return
+        win = MainWindow(project)
+        win.show()
+        _windows.append(win)
+        self.close()
+
+    def about(self) -> None:
+        from .. import __version__
+        QMessageBox.about(
+            self, "About panescape",
+            f"<h3>panescape {__version__}</h3>"
+            "<p>True-to-scale wallpapers across monitors of different sizes, resolutions and orientations.</p>"
+            f"<p><a href='{DOCS_URL}'>{DOCS_URL}</a></p>"
+            "<p>MIT licence. Unsplash photos are credited to their photographers in "
+            "<code>pictures/credits.yml</code>.</p>")
 
     # ------------------------------------------------------------------ closing
     def closeEvent(self, event):

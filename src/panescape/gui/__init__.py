@@ -35,11 +35,24 @@ def _find_root(given: str | None):
     return Path(chosen) if chosen else None
 
 
+def prepare_project(root: Path):
+    """The folders and a starter setup.yml, so a new folder opens ready to use."""
+    from ..cli import EXAMPLE_SETUP
+    from ..project import Project
+    project = Project(root)
+    for d in (project.pictures, project.configurations, project.backgrounds):
+        d.mkdir(parents=True, exist_ok=True)
+    if not project.setup_file.exists():
+        names = project.config_names()
+        project.setup_file.write_text(EXAMPLE_SETUP.format(config=names[0] if names else "my_desk"))
+    from PySide6.QtCore import QSettings
+    QSettings().setValue("root", str(project.root))
+    return project
+
+
 def main(root: str | Path | None = None) -> int:
     from PySide6.QtWidgets import QApplication
 
-    from ..cli import EXAMPLE_SETUP
-    from ..project import Project
     from .main_window import MainWindow
 
     app = QApplication.instance() or QApplication(sys.argv)
@@ -56,15 +69,7 @@ def main(root: str | Path | None = None) -> int:
     root = Path(root) if root else _find_root(None)
     if root is None:
         return 0
-    project = Project(root)
-    for d in (project.pictures, project.configurations, project.backgrounds):
-        d.mkdir(parents=True, exist_ok=True)
-    if not project.setup_file.exists():
-        names = project.config_names()
-        project.setup_file.write_text(EXAMPLE_SETUP.format(config=names[0] if names else "my_desk"))
-    from PySide6.QtCore import QSettings
-    QSettings().setValue("root", str(project.root))
-    win = MainWindow(project)
+    win = MainWindow(prepare_project(root))
     win.show()
     return app.exec()
 

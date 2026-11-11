@@ -69,6 +69,13 @@ panescape-gui            # or: panescape gui
 It edits the same files as the command line, keeping your comments, so you
 can switch between the two whenever you like.
 
+- **App menu:** pipx doesn't add panescape to your app menu. Tick **Help ▸
+  Show panescape in the app menu**, or run `panescape gui --install-launcher`.
+- **First run:** in a new folder, a *Getting started* strip walks you through
+  describing your monitors, adding pictures and applying. **File ▸ Open
+  folder…** (Ctrl+O) switches to another panescape folder or makes a new one.
+- **Shortcuts:** Ctrl+1 to Ctrl+4 switch tabs, Ctrl+S saves the layout, Ctrl+Q quits.
+
 - **Setup** (top bar): choose which [setup](#setupyml) is active, or create,
   rename and delete setups.
 - **Layout:** pick the configuration the active setup uses, or make a new one
