@@ -173,6 +173,10 @@ Unsplash's own links (never copied into a cache), every download is reported
 to Unsplash so the photographer gets credit, and photographers and Unsplash
 are credited with links.
 
+The Unsplash tab is for personal use with your own key: each person makes
+their own application and keeps within its limits. panescape is not
+affiliated with or endorsed by Unsplash.
+
 ## How a project folder looks
 
 ```
