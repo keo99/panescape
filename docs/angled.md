@@ -82,6 +82,9 @@ Then fine-tune by eye (below).
 
 ## Calibrating from Your Seat
 
+The quickest way is [one photo from your seat](calibrating.md#from-a-photo): it
+measures the angles, tilts and your eye position for you. To do it by eye:
+
 Tick **Calibrate on my screens** on the Layout tab, sit where you normally sit, and
 **close one eye**. The correction is exact for one eye; with both open it's a
 compromise. On the angled screens the pattern looks bent on purpose: from your
