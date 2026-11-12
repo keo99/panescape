@@ -213,6 +213,8 @@ def _monitor_from_entry(i: int, entry: dict, defaults: dict) -> Monitor:
         base = rotate_bezel(model["bezel"], rotation)
         if entry.get("bezel") is None and model.get("bezel_estimated"):
             notes.append("bezels are estimated from the spec sheet; measure and set 'bezel' for best alignment")
+    elif model and entry.get("bezel") is None and defaults.get("bezel") is None:
+        notes.append("bezels are not in the model's data, so they count as 0; measure and set 'bezel'")
     bezel_val = entry.get("bezel", defaults.get("bezel"))
     bezel = parse_bezel(bezel_val, base)
 

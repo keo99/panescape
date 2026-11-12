@@ -131,3 +131,16 @@ def test_new_layout_uses_the_size_screens_report(tmp_path):
     cfg = load_configuration(first)
     assert cfg.monitors[0].active == (480, 270)
     compute_layout(cfg)  # valid straight away, nothing to fill in
+
+
+def test_reported_size_keeps_the_pixels_shape():
+    from panescape.skeleton import square_pixels
+    w, h = square_pixels((530, 300), (1920, 1080))  # rounded to cm: not quite 16:9
+    assert round(w, 1) == 530.8 and round(h, 1) == 298.6 and abs(w / h - 16 / 9) < 1e-9
+
+
+def test_your_monitors_are_known_models():
+    from panescape import models
+    assert models.lookup("DELL P2422H")["active_area"] == (527.04, 296.46)
+    assert models.lookup("S22B300")["active_area"] == (476.64, 268.11)
+    assert "bezel" not in models.lookup("S22B300")

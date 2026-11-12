@@ -346,6 +346,9 @@ class MonitorForm(QWidget):
             known = models.lookup(self.entry.get("model"))
             if own:
                 self.bezel_note.setText("")
+            elif known and not known.get("bezel"):
+                self.bezel_note.setText(f"The {known['model'].title()} spec doesn't give its bezels, "
+                                        "so they count as 0: measure them.")
             elif known:
                 est = " (estimated from the spec sheet: measure them for the best result)" \
                     if known.get("bezel_estimated") else ""

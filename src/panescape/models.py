@@ -35,6 +35,22 @@ MODELS: dict[str, dict] = {
         "bezel_estimated": True,
         "source": "Dell P2425H spec sheet",
     },
+    "dell p2422h": {
+        "aliases": ["p2422h", "dell24p2422h"],
+        "resolution": (1920, 1080),
+        "active_area": (527.04, 296.46),  # 0.2745 mm pixel pitch
+        # outer (no stand) 537.8 x 318.5 mm -> 5.38 mm per side, 22.04 mm top+bottom
+        "bezel": {"top": 5.4, "right": 5.38, "bottom": 16.64, "left": 5.38},
+        "bezel_estimated": True,
+        "source": "Dell P2422H spec sheet (pixel pitch, size without stand)",
+    },
+    "samsung s22b300": {
+        "aliases": ["s22b300", "s22b300b", "s22b300h", "s22b300n", "ls22b300"],
+        "resolution": (1920, 1080),
+        "active_area": (476.64, 268.11),  # 0.24825 mm pixel pitch
+        # no bezel: the manual's outer sizes aren't clearly for this model; measure them
+        "source": "Samsung S22B300 user manual (display area)",
+    },
 }
 
 
