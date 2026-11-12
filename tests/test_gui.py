@@ -176,3 +176,35 @@ def test_new_layout_copy(window, tmp_path, monkeypatch):
     window.layout_editor.new_config()
     assert (tmp_path / "configurations" / "desk2.yml").read_text() == CONFIG
     assert Project(tmp_path).load_setup()["configuration"] == "desk2"
+
+
+def _housings(ed):
+    """Each housing's place relative to the first monitor, to 0.1 mm (offsets are stored to 0.1 mm)."""
+    first = ed.layout_.placed[0].outer
+    return {p.monitor.name: (pytest.approx(p.outer.x - first.x, abs=0.06), pytest.approx(p.outer.y - first.y, abs=0.06))
+            for p in ed.layout_.placed}
+
+
+def test_measured_from_names_the_real_default_and_changes_keep_monitors_in_place(window):
+    ed = window.layout_editor
+    f = ed.form
+    ed.list.setCurrentRow(1)  # centre: in a plain row, so measured from the first monitor
+    assert f.v_ref.itemText(0) == "left (the first monitor)"
+    ed.list.setCurrentRow(2)  # right: right_of centre
+    assert f.v_ref.itemText(0) == "centre (the one it's next to)"
+
+    before = {k: (x.expected, y.expected) for k, (x, y) in _housings(ed).items()}
+    f.v_ref.setCurrentIndex(f.v_ref.findData("left"))  # measure right from left instead
+    assert _housings(ed) == before
+    right = ed.monitors()[2]
+    assert right["v_ref"] == "left" and right["v_pos"] == -20  # centre is 20 mm lower than left, and so is right
+    assert f.v_pos.value() == -20
+
+    ed.list.setCurrentRow(1)
+    f.v_ref.setCurrentIndex(f.v_ref.findData("left"))  # the same as the default: nothing moves
+    assert _housings(ed) == before and ed.monitors()[1]["v_pos"] == -20
+
+    f.v_align.setCurrentIndex(f.v_align.findData("top"))  # centre vs the (taller) left: line up the tops
+    assert _housings(ed) == before
+    centre = ed.monitors()[1]
+    assert centre["v_align"] == "top" and f.v_pos.value() == centre["v_pos"] < -20  # its top is further down

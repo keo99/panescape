@@ -307,9 +307,15 @@ class MonitorForm(QWidget):
             for n in others:
                 self.target.addItem(n, n)
             _select(self.target, target)
-            for combo, key in ((self.v_ref, "v_ref"), (self.h_ref, "h_ref")):
+            # what each offset is measured from when "measured from" is left at its default
+            if mode in ("right_of", "left_of") and entry.get(mode) is None:  # a plain row
+                v_default = (names[0], "the first monitor")
+            else:
+                v_default = (target, "the one it's next to")
+            h_default = (target, "the one it's above/below")
+            for combo, key, (ref, why) in ((self.v_ref, "v_ref", v_default), (self.h_ref, "h_ref", h_default)):
                 combo.clear()
-                combo.addItem("the one it's next to" if key == "v_ref" else "the one it's above/below", None)
+                combo.addItem(f"{ref} ({why})" if ref else why, None)
                 for n in others:
                     combo.addItem(n, n)
                 _select(combo, entry.get(key))
@@ -886,13 +892,47 @@ class LayoutEditor(QWidget):
 
     def apply_edit(self, values: dict, structural: bool = False) -> None:
         e = self.monitors()[self.sel]
+        # changing what an offset is measured from keeps the monitor where it is
+        axis = "v" if set(values) <= {"v_align", "v_ref"} else "h" if set(values) <= {"h_align", "h_ref"} else None
+        before = self._offset_from_anchor(e.get("name")) if axis else None
         for k, v in values.items():
             if v is None:
                 e.pop(k, None)
             else:
                 put(e, k, v)
+        if before is not None:
+            self._keep_in_place(e, axis, before)
         self.form.entry = yamledit.plain(e)
         self._changed(structural)
+
+    def _offset_from_anchor(self, name) -> tuple[float, float] | None:
+        """(x, y) of a monitor's housing relative to the first monitor's, or None if the layout isn't valid."""
+        try:
+            cfg = configuration_from_dict(yamledit.plain(self.doc), name=self.name or "config")
+            placed = compute_layout(cfg).placed
+        except (ConfigError, ProjectError, ValueError, KeyError, TypeError):
+            return None
+        first = placed[0].outer
+        me = next((p.outer for p in placed if p.monitor.name == str(name)), None)
+        return None if me is None else (me.x - first.x, me.y - first.y)
+
+    def _keep_in_place(self, e, axis: str, before: tuple[float, float]) -> None:
+        after = self._offset_from_anchor(e.get("name"))
+        if after is None:
+            return
+        if axis == "v":  # + is up, y grows down
+            new = _num(e.get("v_pos")) + (after[1] - before[1])
+            spin = self.form.v_pos
+        else:  # + is right
+            new = _num(e.get("h_pos")) - (after[0] - before[0])
+            spin = self.form.h_pos
+        new = number(round(new, spin.decimals()))  # what the form can show, so the two agree
+        put(e, f"{axis}_pos", new)
+        self.form._loading = True
+        try:
+            spin.setValue(new)
+        finally:
+            self.form._loading = False
 
     def _changed(self, structural: bool = False) -> None:
         self.dirty = True

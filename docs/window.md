@@ -30,6 +30,10 @@ Close it with ✕, and bring it back with **Help ▸ Getting started**.
 - **Drag monitors** on the to-scale desk, or select one and use the arrow keys
   (0.5 mm steps; Shift ×10, Alt ×0.2). This changes the `gap` and the
   `v_pos`/`h_pos` offsets.
+- **Line up** and **…measured from** choose which edges and which monitor the
+  offset is measured from. Changing either one keeps the monitor where it is and
+  works out the new **raised by** for you. The first choice in **…measured from**
+  names the monitor used when you don't pick one.
 - **Show** a picture or the calibration pattern across the desk.
 - **Calibrate on my screens** puts the [test pattern](calibrating.md) on your
   real monitors and redraws it as you drag or type. Your wallpaper comes back
