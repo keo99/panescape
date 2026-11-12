@@ -228,3 +228,33 @@ def test_angled_screens_switch_writes_the_viewer_and_angles(window):
     ed.seat.on.setChecked(False)
     assert "viewer" not in ed.doc and all(p.warp is None for p in ed.layout_.placed)
     assert ed.monitors()[2]["angle"] == 25  # kept for when it's switched back on
+
+
+def test_photo_dialog_measures_and_fills_in_the_layout(window, tmp_path):
+    pytest.importorskip("numpy")
+    import copy
+
+    from PySide6.QtCore import QThreadPool
+    from test_photocal import fake_photo
+
+    from panescape import yamledit
+    from panescape.gui.photo_dialog import PhotoDialog
+    ed = window.layout_editor
+    truth = copy.deepcopy(yamledit.plain(ed.doc))
+    truth["viewer"] = {"distance": 650, "offset": 600, "height": -60}  # the first monitor is on the left
+    truth["monitors"][2].update(angle=25, gap=4)
+    path = tmp_path / "photo.png"
+    fake_photo(truth, rotvec=(0.02, 0.01, 0), f=700).save(path)
+
+    d = PhotoDialog(ed)
+    d.analyse(str(path))
+    for _ in range(3):
+        QThreadPool.globalInstance().waitForDone(20000)
+        QApplication.processEvents()
+    assert d.use_btn.isEnabled(), d.result.text()
+    assert "turned towards you" in d.result.text()
+    d.use()
+    right = ed.monitors()[2]
+    assert right["angle"] == pytest.approx(25, abs=0.5) and right["gap"] == pytest.approx(4, abs=0.5)
+    assert ed.doc["viewer"]["distance"] == pytest.approx(650, abs=10)
+    assert ed.dirty and ed.layout_.placed[2].warp is not None

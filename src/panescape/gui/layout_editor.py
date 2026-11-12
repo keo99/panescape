@@ -784,6 +784,10 @@ class LayoutEditor(QWidget):
         self.guide = QPushButton("How to calibrate")
         self.guide.clicked.connect(self.show_guide)
         bottom.addWidget(self.guide)
+        self.photo_btn = QPushButton("From a photo…")
+        self.photo_btn.setToolTip("Measure the gaps, heights and angles from one photo taken from your seat")
+        self.photo_btn.clicked.connect(self.calibrate_from_photo)
+        bottom.addWidget(self.photo_btn)
         self.revert_btn = QPushButton("Revert")
         self.revert_btn.clicked.connect(self.revert)
         bottom.addWidget(self.revert_btn)
@@ -1418,6 +1422,17 @@ class LayoutEditor(QWidget):
                 self.project.end_calibration(self.backend())
             except Exception:  # noqa: BLE001
                 pass
+
+    def calibrate_from_photo(self) -> None:
+        from .. import photocal
+        hint = photocal.missing()
+        if hint:
+            QMessageBox.information(self, "Calibrate from a photo", hint)
+            return
+        if self.doc is None:
+            return
+        from .photo_dialog import PhotoDialog
+        PhotoDialog(self).exec()
 
     def show_guide(self) -> None:
         from .. import calibrate
