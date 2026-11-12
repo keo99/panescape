@@ -68,6 +68,11 @@ def _align(a0, a1, b0, b1, low: str, high: str) -> str:
     return "center"
 
 
+def _mm(v: float):
+    v = round(v, 1)
+    return int(v) if v == int(v) else v
+
+
 def usable_serial(m, mons) -> bool:
     """Only pin by serial when it identifies the screen (compositors report
     missing serials as '', 'Unknown' or 0x00000000)."""
@@ -91,7 +96,11 @@ def config_skeleton(mons, name: str) -> dict:
             e["model"] = known["model"].title()
         else:
             e["resolution"] = f"{m.mode[0]}x{m.mode[1]}"
-            e["size"] = "TODO"  # diagonal, e.g. 27in, or use active_area: [w, h] mm
+            reported = m.reported_size() if hasattr(m, "reported_size") else None
+            if reported:
+                e["active_area"] = [_mm(reported[0]), _mm(reported[1])]  # from the EDID
+            else:
+                e["size"] = "TODO"  # diagonal, e.g. 27in, or use active_area: [w, h] mm
         if usable_serial(m, mons):
             e["serial"] = m.serial
         e["rotation"] = ROTATION_NAMES[m.rotation]

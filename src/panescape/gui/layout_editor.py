@@ -687,6 +687,7 @@ class LayoutEditor(QWidget):
         if self.path and str(self.path) in self.watcher.files():
             self.watcher.removePath(str(self.path))
         self.name, self.path, self.doc = name, None, None
+        self._last_good = None  # never show another layout's monitors while this one isn't valid
         if name:
             try:
                 self.path = self.project.config_path(name)

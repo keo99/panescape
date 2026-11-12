@@ -38,7 +38,9 @@ Other examples: [a laptop under a monitor](https://github.com/keo99/panescape/bl
 [portrait-landscape-portrait](https://github.com/keo99/panescape/blob/main/examples/configurations/portrait-landscape-portrait.yml).
 
 `panescape detect --write NAME` writes this structure for you from the desktop's
-arrangement (rows, stacks and grids), with the measured numbers left at 0. When
+arrangement (rows, stacks and grids), with the measured numbers left at 0. Screens
+it has no model for get the size they report (on GNOME and KDE Plasma; usually
+rounded to whole cm), or `size: TODO` if they don't report one. When
 applying, config monitors are matched to the desktop's screens by **arrangement**,
 so a grid pairs up correctly. Use `serial:` to pin a monitor if two arrangements
 could be confused.

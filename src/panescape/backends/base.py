@@ -103,6 +103,10 @@ def competing_tools() -> list[str]:
     return out
 
 
+# what screens that only know their aspect ratio report as a size (16:9 / 16:10, in cm or mm)
+_ASPECT_ONLY = {(160, 90), (160, 100), (1600, 900), (1600, 1000)}
+
+
 @dataclass
 class OsMonitor:
     connector: str
@@ -119,10 +123,28 @@ class OsMonitor:
     mode: tuple[int, int]  # native mode pixels (landscape as reported)
     primary: bool
     builtin: bool
+    physical_mm: tuple[float, float] | None = None  # as the screen reports it (EDID), if the desktop says
 
     @property
     def center_x(self) -> float:
         return self.x + self.width / 2
+
+    def reported_size(self) -> tuple[float, float] | None:
+        """The screen's own idea of its lit area, landscape mm, when believable.
+
+        It comes from the EDID, which usually rounds to whole centimetres, so it's
+        a good start but not as exact as a spec sheet. Projectors and some TVs
+        report 0 or only an aspect ratio (e.g. 16 x 9 cm): those are ignored.
+        """
+        if not self.physical_mm:
+            return None
+        w, h = sorted((float(v) for v in self.physical_mm), reverse=True)
+        mw, mh = sorted(self.mode, reverse=True)
+        if w < 100 or w > 2500 or h <= 0 or mh <= 0 or (round(w), round(h)) in _ASPECT_ONLY:
+            return None
+        if abs((w / h) / (mw / mh) - 1) > 0.05:  # doesn't fit the pixels: not a real size
+            return None
+        return (w, h)
 
 
 @dataclass

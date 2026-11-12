@@ -11,7 +11,9 @@ Run `panescape-gui`. The first time, it asks for a folder and sets it up. A
 
 1. **Describe your monitors.** Press **New…** on the Layout tab and start from
    the monitors connected now. panescape fills in what it knows about each
-   model. Then measure the gaps between your screens and how high each one
+   model. For a model it doesn't know, it uses the size the screen reports
+   about itself, which is usually rounded to whole centimetres: the spec
+   sheet's active area is more exact. Then measure the gaps between your screens and how high each one
    sits, and enter them, or drag the monitors on the desk.
    Tick **Calibrate on my screens** to fine-tune with a test pattern
    ([Calibrating](calibrating.md)).

@@ -32,6 +32,8 @@ DETECTED_HEADER = (
     "# The structure (who is next to / below whom, aligned edges) is a guess from\n"
     "# the desktop's layout; gap, v_pos, h_pos and bezel are 0: measure them (mm), or tune\n"
     "# them live with:  panescape calibrate --watch  (or the Calibrate switch in panescape-gui)\n"
+    "# active_area comes from what each screen reports, usually rounded to whole cm:\n"
+    "# the spec sheet's active area (or a known model) is more exact.\n"
     "# Any 'size: TODO' needs the diagonal (e.g. 27in) or active_area: [w, h] in mm.\n")
 
 
@@ -263,7 +265,13 @@ class Project:
         if path.exists() and not overwrite:
             raise ProjectError(f"{path} exists (use --overwrite)")
         path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(DETECTED_HEADER + yamledit.safe_dump(config_skeleton(os_monitors, name)), encoding="utf-8")
+        doc = yamledit.loads(yamledit.safe_dump(config_skeleton(os_monitors, name)))
+        for entry in doc.get("monitors") or []:
+            if "active_area" in entry:
+                entry["active_area"].fa.set_flow_style()
+                entry.yaml_add_eol_comment("as the screen reports it (whole cm): the spec sheet is more exact",
+                                           "active_area")
+        path.write_text(DETECTED_HEADER + yamledit.dumps(doc), encoding="utf-8")
         return path
 
     def rename_config(self, old: str, new: str) -> Path:

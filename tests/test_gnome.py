@@ -46,3 +46,19 @@ def test_arrangement_matching_keeps_row_order_with_offsets():
                for p in compute_layout(cfg)}
     pairing = gnome.match_monitors(cfg.monitors, os_layout(), centres)
     assert {k: v.connector for k, v in pairing.items()} == {"left": "DP-6", "centre": "DP-8", "right": "DP-7"}
+
+
+def test_physical_sizes_from_mutter(monkeypatch):
+    import json
+    import subprocess
+
+    from panescape.backends import gnome
+    reply = {"data": [1, [], [
+        [0, 0, 0, [], "DP-1", [], [], {"width-mm": {"type": "i", "data": 600},
+                                       "height-mm": {"type": "i", "data": 340}}],
+        [1, 0, 0, [], "HDMI-1", [], [], {}],
+    ], [], 0, 0]}
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 0, json.dumps(reply), ""))
+    assert gnome._physical_sizes() == {"DP-1": (600.0, 340.0)}
+    monkeypatch.setattr(subprocess, "run", lambda *a, **k: subprocess.CompletedProcess(a, 1, "", "no mutter"))
+    assert gnome._physical_sizes() == {}

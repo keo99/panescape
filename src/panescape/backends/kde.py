@@ -67,13 +67,19 @@ def parse_kscreen(data: dict) -> OsLayout:
         scale = float(o.get("scale") or 1.0)
         lw, lh = (mh, mw) if rot in (90, 270) else (mw, mh)
         name = o.get("name", "")
+        mm = o.get("sizeMM") or o.get("sizeMm") or {}
+        try:
+            physical = (float(mm["width"]), float(mm["height"])) if mm else None
+        except (KeyError, TypeError, ValueError):
+            physical = None
         mons.append(OsMonitor(
             connector=name, vendor=o.get("vendor", "") or "", product=o.get("model", "") or "",
             serial=o.get("serial", "") or "", display_name=o.get("model") or name,
             x=int(o.get("pos", {}).get("x", 0)), y=int(o.get("pos", {}).get("y", 0)),
             width=round(lw / scale), height=round(lh / scale), scale=scale, rotation=rot,
             mode=(mw, mh), primary=o.get("priority") == 1,
-            builtin=str(o.get("type", "")).lower() in ("panel", "embedded") or name.startswith(("eDP", "LVDS"))))
+            builtin=str(o.get("type", "")).lower() in ("panel", "embedded") or name.startswith(("eDP", "LVDS")),
+            physical_mm=physical))
     if not mons:
         raise BackendError("kscreen-doctor reports no enabled outputs")
     return OsLayout(mons, logical=True)

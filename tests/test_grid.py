@@ -108,3 +108,26 @@ def test_skeleton_skips_unusable_serials():
     sk = config_skeleton([mk("A", 0, "Unknown"), mk("B", 1920, "XY1"), mk("C", 3840, "XY1"),
                           mk("D", 5760, "Z9")], "s")
     assert [("serial" in e) for e in sk["monitors"]] == [False, False, False, True]
+
+
+def test_new_layout_uses_the_size_screens_report(tmp_path):
+    from panescape.backends.base import OsMonitor
+    from panescape.config import load_configuration
+    from panescape.layout import compute_layout
+    from panescape.project import Project
+
+    def mk(name, x, mm):
+        return OsMonitor(name, "V", "Unknown Model", "", name, x, 0, 1920, 1080, 1.0, 0, (1920, 1080),
+                         False, False, physical_mm=mm)
+    mons = [mk("DP-1", 0, (480, 270)), mk("DP-2", 1920, (160, 90)), mk("DP-3", 3840, (0, 0))]
+    assert mons[0].reported_size() == (480, 270)
+    assert mons[1].reported_size() is None  # an aspect ratio, not a size
+    assert mons[2].reported_size() is None
+    path = Project(tmp_path).write_detected_config("desk", mons)
+    text = path.read_text()
+    assert "active_area: [480, 270]  # as the screen reports it" in text
+    assert text.count("    size: TODO") == 2
+    first = Project(tmp_path).write_detected_config("one", mons[:1])
+    cfg = load_configuration(first)
+    assert cfg.monitors[0].active == (480, 270)
+    compute_layout(cfg)  # valid straight away, nothing to fill in

@@ -59,6 +59,28 @@ def _display_state_json() -> list:
     raise BackendError(f"could not query GNOME display layout ({err})")
 
 
+def _physical_sizes() -> dict[str, tuple[float, float]]:
+    """Connector -> (width, height) mm as Mutter reports it (from the EDID). Best effort."""
+    try:
+        out = subprocess.run(
+            ["busctl", "--user", "--json=short", "call", "org.gnome.Mutter.DisplayConfig",
+             "/org/gnome/Mutter/DisplayConfig", "org.gnome.Mutter.DisplayConfig", "GetResources"],
+            capture_output=True, text=True, timeout=5)
+        outputs = json.loads(out.stdout)["data"][2] if out.returncode == 0 else []
+    except (OSError, ValueError, KeyError, IndexError, subprocess.SubprocessError):
+        return {}
+    sizes = {}
+    for o in outputs:
+        try:
+            props = o[7]
+            w, h = _variant(props.get("width-mm")), _variant(props.get("height-mm"))
+            if w and h:
+                sizes[str(o[4])] = (float(w), float(h))
+        except (IndexError, TypeError, ValueError, AttributeError):
+            continue
+    return sizes
+
+
 def _variant(v):
     return v.get("data") if isinstance(v, dict) and "data" in v else v
 
@@ -73,6 +95,7 @@ def get_layout() -> OsLayout:
             "display_name": _variant(mprops.get("display-name", {})) or spec[0],
             "builtin": bool(_variant(mprops.get("is-builtin", {}))),
         }
+    sizes = _physical_sizes() if shutil.which("busctl") else {}
     layout_mode = _variant(props.get("layout-mode", {"data": 1}))
     logical = layout_mode != 2
     result = []
@@ -88,7 +111,7 @@ def get_layout() -> OsLayout:
             connector=spec[0], vendor=spec[1], product=spec[2], serial=spec[3],
             display_name=meta.get("display_name", spec[0]), x=int(x), y=int(y), width=w, height=h,
             scale=float(scale), rotation=rot, mode=(mw, mh), primary=bool(primary),
-            builtin=meta.get("builtin", False)))
+            builtin=meta.get("builtin", False), physical_mm=sizes.get(spec[0])))
     if not result:
         raise BackendError("GNOME reports no active monitors")
     return OsLayout(result, logical)

@@ -96,3 +96,11 @@ def test_plasma_sizes_override_kscreen():
     assert [kde.screen_for(m, screens) for m in lay.monitors] == [0, 1, 2]
     kde.refine_with_plasma(lay, screens)
     assert [(m.width, m.height) for m in lay.monitors] == [(960, 540)] * 3
+
+
+def test_kscreen_physical_size():
+    import copy
+    data = copy.deepcopy(KSCREEN)
+    data["outputs"][0]["sizeMM"] = {"width": 600, "height": 340}
+    lay = kde.parse_kscreen(data)
+    assert lay.monitors[0].physical_mm == (600, 340) and lay.monitors[1].physical_mm is None
