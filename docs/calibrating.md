@@ -83,9 +83,13 @@ panescape calibrate --restore                               # put your wallpaper
 
 Good to know:
 
-- **Top bars, docks and icons** don't get in the way. The white panel stays well
-  inside each screen, and an edge that's partly covered is still measured from the
-  rest of it. The middle of each panel, where the dots are, must be clear.
+- **Top bars, docks, icons, glare and lamps** don't get in the way. The white
+  panel stays well inside each screen, each edge is measured from the parts of it
+  that are clear, and bright things that aren't panels are ignored. The row of dots
+  in the middle of each panel must be visible.
+- **If it can't measure,** it says which screens it found in each photo and shows
+  them: green for screens found, orange for screens cut off at the photo's edge.
+  The most common cause is the shared screen running off the edge of one photo.
 - **Your sizes must be right.** The photos measure where screens are, not how big
   they are: that comes from each monitor's model or lit area. The bezels don't
   need to be exact, since what counts is the space between lit areas, which goes

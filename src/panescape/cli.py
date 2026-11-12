@@ -291,6 +291,13 @@ def _calibrate_from_photo(path: Path, photos: list[Path], write: bool, overlay: 
     try:
         result = photocal.analyse(photos, raw)
     except photocal.PhotoError as e:
+        if overlay:
+            for i, img in enumerate(e.marked):
+                target = Path(overlay)
+                if len(e.marked) > 1:
+                    target = target.with_name(f"{target.stem}-{i + 1}{target.suffix}")
+                img.save(target)
+                print(f"wrote {target} (green: screens found, orange: cut off at the photo's edge)")
         raise ProjectError(str(e)) from None
     print(f"matched the photo to within {result.rms_mm:.1f} mm on average "
           f"(worst: {result.worst[0]}, {result.worst[1]:.1f} mm)")

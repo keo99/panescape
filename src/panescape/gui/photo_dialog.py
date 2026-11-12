@@ -7,7 +7,6 @@ nothing covers the screens, and the dialog comes back with the window.
 from __future__ import annotations
 
 import copy
-from pathlib import Path
 
 from PySide6.QtCore import QEvent, QObject, Qt
 from PySide6.QtGui import QImage, QPixmap
@@ -183,18 +182,25 @@ class PhotoDialog(QDialog):
         self.use_btn.setEnabled(False)
 
         def work():
-            res = photocal.analyse(paths, raw)
+            try:
+                res = photocal.analyse(paths, raw)
+            except photocal.PhotoError as e:
+                return None, str(e), e.marked  # show what was found, so you can see what went wrong
             return res, photocal.changes(res, raw), [photocal.overlay(res, i) for i in range(len(paths))]
 
         run_async(work, self._measured, self._failed)
 
     def _failed(self, err: str) -> None:
-        names = ", ".join(Path(p).name for p in self.paths)
-        self.result.setText(f"<b>Couldn't measure</b> ({names}): {err}")
+        self.use_btn.setEnabled(False)
+        self.result.setText("<b>Couldn't measure:</b> " + err.replace("\n", "<br>"))
 
     def _measured(self, out) -> None:
         res, found, marked = out
-        self._show_photos(marked)
+        if marked:
+            self._show_photos(marked)
+        if res is None:
+            self._failed(found + "<br>Green: screens found; orange: screens cut off at the photo's edge.")
+            return
         lines = [f"Matched to within <b>{res.rms_mm:.1f} mm</b> on average "
                  f"(worst: {res.worst[0]}, {res.worst[1]:.1f} mm). "
                  "Green: what was found; pink: where the measured layout puts the corners."]

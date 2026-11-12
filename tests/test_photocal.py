@@ -29,7 +29,8 @@ LAPTOP = {"viewer": {"distance": 560, "height": -40}, "monitors": [
 def fake_photo(raw, rotvec=(0.06, -0.05, 0.015), f=1000.0, size=(3000, 2000), messy=False,
                clutter=False) -> Image.Image:
     """What a camera at the viewer's eyes sees while the screens show the photo pattern.
-    ``clutter``: a top bar across the first screen and a desktop icon over a panel's edge."""
+    ``clutter``: a top bar across the first screen, a desktop icon over a panel's edge and
+    another beside the dots, glare above a panel and a lamp in the room."""
     from PIL import ImageDraw
     lay = compute_layout(configuration_from_dict(raw))
     eye = np.array(lay.eye)
@@ -49,9 +50,19 @@ def fake_photo(raw, rotvec=(0.06, -0.05, 0.015), f=1000.0, size=(3000, 2000), me
             d.rectangle((0, 0, pw, round(0.03 * ph)), fill=(40, 40, 40))           # the top bar
             k = round(0.1 * min(pw, ph))
             d.rectangle((k - 20, ph // 3, k + 40, ph // 3 + 60), fill=(90, 60, 30))  # an icon over the edge
+            d.rectangle((pw // 3, ph // 2 + 30, pw // 3 + 45, ph // 2 + 75), fill=(200, 90, 20))  # beside the dots
         screen = pattern.transform(size, Image.Transform.PERSPECTIVE, h[:8],
                                    Image.Resampling.BICUBIC, fillcolor=(0, 0, 0))
         photo = ImageChops.lighter(photo, screen)
+        if clutter and p.monitor.index == 1:  # glare on the glossy border above this panel
+            k = 0.1 * min(pw, ph)
+            glare = Image.new("RGB", (pw, ph))
+            ImageDraw.Draw(glare).polygon([(pw * 0.3, 2), (pw * 0.7, 2), (pw * 0.62, k + 2), (pw * 0.38, k + 2)],
+                                          fill=(200, 200, 200))
+            photo = ImageChops.lighter(photo, glare.transform(size, Image.Transform.PERSPECTIVE, h[:8],
+                                                              Image.Resampling.BICUBIC, fillcolor=(0, 0, 0)))
+    if clutter:  # a lamp
+        ImageDraw.Draw(photo).ellipse((size[0] * 0.45, 20, size[0] * 0.45 + 160, 180), fill=(255, 250, 235))
     if messy:  # out of focus, dimmer screens, uneven room light, sensor noise
         a = np.asarray(photo.filter(ImageFilter.GaussianBlur(2.5)), float)
         hh, ww = a.shape[:2]

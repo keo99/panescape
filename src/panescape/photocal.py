@@ -40,7 +40,11 @@ def missing() -> str | None:
 
 
 class PhotoError(ValueError):
-    pass
+    """What went wrong, for people. ``marked``: the photos with what was found drawn on them."""
+
+    def __init__(self, message: str, marked: list | None = None):
+        super().__init__(message)
+        self.marked = marked or []
 
 
 # --------------------------------------------------------------------------- the photo
@@ -135,25 +139,59 @@ def _components(mask) -> list:
     return list(groups.values())
 
 
-def _fit_line(points):
-    """A line through edge points, ignoring points that stray from it (something in
-    front of the screen, a notch): (point on it, unit direction)."""
+def _fit_line(points, centre=None):
+    """A straight edge through ``points``, ignoring points off it (an icon or a notch).
+
+    With ``centre`` (the panel's middle): of the straight lines with good support,
+    the one nearest the middle. Glare, a lit wall or a reflection touching a panel
+    only ever adds brightness outside its edge, so the real edge is the innermost.
+    Returns (point on it, unit direction)."""
     import numpy as np
     pts = np.asarray(points, dtype=np.float64)
-    keep = np.ones(len(pts), dtype=bool)
-    for _ in range(4):
+    rng = np.random.default_rng(0)
+    span = float(np.ptp(pts, axis=0).max()) if len(pts) else 0.0
+
+    def ransac(mask):
+        best = None
+        idx = np.flatnonzero(mask)
+        if len(idx) < 10:
+            return None
+        for _ in range(300):
+            i, j = rng.choice(idx, 2, replace=False)
+            d = pts[j] - pts[i]
+            norm = np.linalg.norm(d)
+            if norm < 0.15 * span:
+                continue  # too close together to define the line well
+            n = np.array([-d[1], d[0]]) / norm
+            inliers = mask & (np.abs((pts - pts[i]) @ n) < 1.5)
+            if best is None or inliers.sum() > best.sum():
+                best = inliers
+        return best
+
+    def line(keep):
         c = pts[keep].mean(axis=0)
         _, _, vt = np.linalg.svd(pts[keep] - c, full_matrices=False)
-        normal = vt[1]
-        dist = np.abs((pts - c) @ normal)
-        limit = max(1.5, 2.5 * float(np.median(dist[keep])) * 1.4826)
-        new = dist <= limit
-        if new.sum() < max(5, 0.3 * len(pts)) or (new == keep).all():
+        return c, vt[0]
+
+    candidates, left = [], np.ones(len(pts), dtype=bool)
+    for _ in range(3 if centre is not None else 1):
+        found = ransac(left)
+        if found is None or found.sum() < max(5, 0.2 * len(pts)):
             break
-        keep = new
-    c = pts[keep].mean(axis=0)
-    _, _, vt = np.linalg.svd(pts[keep] - c, full_matrices=False)
-    return c, vt[0]
+        candidates.append(found)
+        left &= ~found
+    if not candidates:
+        return line(np.ones(len(pts), dtype=bool))
+    if centre is None or len(candidates) == 1:
+        return line(candidates[0])
+    lines = [line(k) for k in candidates]
+
+    def distance(ln):
+        c, d = ln
+        n = np.array([-d[1], d[0]])
+        return abs((np.asarray(centre) - c) @ n)
+
+    return min(lines, key=distance)
 
 
 def _intersect(l1, l2):
@@ -197,20 +235,23 @@ def _quad(m, x0, y0) -> list[tuple[float, float]]:
             raise PhotoError("a screen's edges are too short to measure: get closer, or use a sharper photo")
         return sel
 
-    lines = [_fit_line(between(top, tl, tr, 0)), _fit_line(between(right, tr, br, 1)),
-             _fit_line(between(bottom, bl, br, 0)), _fit_line(between(left, tl, bl, 1))]
+    mid = (tl + tr + br + bl) / 4
+    lines = [_fit_line(between(top, tl, tr, 0), mid), _fit_line(between(right, tr, br, 1), mid),
+             _fit_line(between(bottom, bl, br, 0), mid), _fit_line(between(left, tl, bl, 1), mid)]
     corners = [_intersect(lines[3], lines[0]), _intersect(lines[0], lines[1]),
                _intersect(lines[1], lines[2]), _intersect(lines[2], lines[3])]
     return [(float(c[0]), float(c[1])) for c in corners]
 
 
 def _dots(m) -> int:
-    """How many dark dots sit in the middle of a white panel: which monitor it is."""
-    import numpy as np
+    """How many dots are in the row in the middle of a white panel: which monitor it is.
+
+    Only holes that look like the dots count: about the same size, level with each
+    other, in a row centred on the panel. Desktop icons, a mouse pointer or a
+    notification elsewhere on the panel are ignored."""
     h, w = m.shape
     area = int(m.sum())
-    count = 0
-    sizes = []
+    holes = []
     for comp in _components(~m):
         ys = [r[0] for r in comp]
         xs0 = [r[1] for r in comp]
@@ -218,24 +259,102 @@ def _dots(m) -> int:
         if min(ys) == 0 or max(ys) == h - 1 or min(xs0) == 0 or max(xs1) == w:
             continue  # outside the panel, not a hole in it
         size = sum(b - a for _, a, b in comp)
-        cy = (min(ys) + max(ys) + 1) / 2
-        cx = (min(xs0) + max(xs1)) / 2
         bw, bh = max(xs1) - min(xs0), max(ys) - min(ys) + 1
-        if size < 0.0005 * area or not (0.1 * w < cx < 0.9 * w and 0.3 * h < cy < 0.7 * h):
-            continue  # specks, or something in front of the panel away from the middle
-        if not 0.4 < bw / max(bh, 1) < 2.5:
+        if size < 0.0005 * area or not 0.4 < bw / bh < 2.5 or size < 0.5 * bw * bh:
+            continue  # specks, or shapes that aren't solid squares
+        holes.append(((min(xs0) + max(xs1)) / 2, (min(ys) + max(ys) + 1) / 2, size))
+    best, best_score = 0, None
+    for _, sy, ss in holes:
+        side = ss ** 0.5
+        row = [hx for hx, hy, hs in holes if 0.55 * ss <= hs <= 1.8 * ss and abs(hy - sy) < 0.5 * side]
+        cx = sum(row) / len(row)
+        # the row is centred on the panel (perspective moves it a little)
+        if not (0.3 * w < cx < 0.7 * w and 0.3 * h < sy < 0.7 * h):
             continue
-        sizes.append(size)
-        count += 1
-    if sizes and max(sizes) > 4 * np.median(sizes):
-        return 0  # not a row of equal dots: something covers the middle
-    return count
+        score = abs(cx - w / 2) / w + abs(sy - h / 2) / h
+        if best_score is None or score < best_score:
+            best, best_score = len(row), score
+    return best
+
+
+def _sample(gray, xs, ys):
+    """Bilinear samples of ``gray`` at float coordinates (pixel centres at +0.5)."""
+    import numpy as np
+    h, w = gray.shape
+    x = np.clip(xs - 0.5, 0, w - 1.001)
+    y = np.clip(ys - 0.5, 0, h - 1.001)
+    x0, y0 = np.floor(x).astype(int), np.floor(y).astype(int)
+    fx, fy = x - x0, y - y0
+    return (gray[y0, x0] * (1 - fx) * (1 - fy) + gray[y0, x0 + 1] * fx * (1 - fy)
+            + gray[y0 + 1, x0] * (1 - fx) * fy + gray[y0 + 1, x0 + 1] * fx * fy)
+
+
+def _refine(gray, corners) -> list[tuple[float, float]]:
+    """Move each edge to where the brightness is halfway between the panel and what's
+    just outside it, there: glare or a lit wall beside an edge doesn't drag it out."""
+    import numpy as np
+    q = np.array(corners, dtype=np.float64)
+    centre = q.mean(axis=0)
+    steps = np.arange(-10, 10.01, 0.25)
+    lines = []
+    for i in range(4):
+        a, b = q[i], q[(i + 1) % 4]
+        d = (b - a) / np.linalg.norm(b - a)
+        n = np.array([d[1], -d[0]])
+        if (a - centre) @ n < 0:
+            n = -n  # pointing out of the panel
+        pts = []
+        for t in np.linspace(0.12, 0.88, 90):
+            p = a + t * (b - a)
+            prof = _sample(gray, p[0] + steps * n[0], p[1] + steps * n[1])
+            inside, outside = np.median(prof[steps < -4]), np.median(prof[steps > 4])
+            if inside - outside < 30:
+                continue
+            mid = (inside + outside) / 2
+            below = np.flatnonzero((prof[:-1] >= mid) & (prof[1:] < mid))
+            if not len(below):
+                continue
+            k = below[np.argmin(np.abs(steps[below]))]  # the crossing nearest the first guess
+            frac = (prof[k] - mid) / (prof[k] - prof[k + 1])
+            s = steps[k] + frac * (steps[k + 1] - steps[k])
+            pts.append(p + s * n)
+        if len(pts) < 10:
+            return corners  # can't do better than the first guess
+        lines.append(_fit_line(pts))
+    out = [_intersect(lines[3], lines[0]), _intersect(lines[0], lines[1]),
+           _intersect(lines[1], lines[2]), _intersect(lines[2], lines[3])]
+    return [(float(c[0]), float(c[1])) for c in out]
+
+
+def _own_panel(gray, runs):
+    """The panel cut out at its own brightness: halfway-plus between its white and the
+    dark around it, so glare or a lit wall touching it falls away. (mask, x0, y0)"""
+    import numpy as np
+    m, x0, y0 = _mask(runs)
+    pad = 6
+    h, w = gray.shape
+    ya, yb, xa, xb = max(0, y0 - pad), min(h, y0 + m.shape[0] + pad), max(0, x0 - pad), min(w, x0 + m.shape[1] + pad)
+    sub = gray[ya:yb, xa:xb]
+    inside = np.zeros_like(sub, dtype=bool)
+    inside[y0 - ya:y0 - ya + m.shape[0], x0 - xa:x0 - xa + m.shape[1]] = m
+    white = float(np.percentile(sub[inside], 90))
+    dark = float(np.percentile(sub[~inside], 20)) if (~inside).any() else 0.0
+    comps = _components(sub > dark + 0.7 * (white - dark))
+    if not comps:
+        return m, x0, y0
+    best = max(comps, key=lambda c: sum(b - a for _, a, b in c))
+    m2, bx, by = _mask(best)
+    return m2, bx + xa, by + ya
 
 
 @dataclass
 class Found:
     screens: dict[int, list]        # dot count (1 = first monitor) -> corners (TL, TR, BR, BL)
-    cut_off: int = 0                # panels touching the photo's edge, left out
+    cut_off: list = field(default_factory=list)   # boxes (x0, y0, x1, y1) of panels running off the photo
+
+    @property
+    def cut_count(self) -> int:
+        return len(self.cut_off)
 
 
 def find_screens(photo: Photo) -> Found:
@@ -250,20 +369,18 @@ def find_screens(photo: Photo) -> Found:
     for c in sorted(comps, key=lambda c: -sum(b - a for _, a, b in c)):
         if sum(b - a for _, a, b in c) < min_area:
             break
-        if min(r[0] for r in c) <= 1 or max(r[0] for r in c) >= h - 2 or \
-                min(r[1] for r in c) <= 1 or max(r[2] for r in c) >= w - 1:
-            found.cut_off += 1
-            continue
-        m, x0, y0 = _mask(c)
+        box = (min(r[1] for r in c), min(r[0] for r in c), max(r[2] for r in c), max(r[0] for r in c) + 1)
+        m, x0, y0 = _own_panel(g, c)
         n = _dots(m)
+        if box[1] <= 1 or box[3] >= h - 1 or box[0] <= 1 or box[2] >= w - 1:
+            if n or m.mean() > 0.6:  # a panel (not the wall or a window) running off the photo
+                found.cut_off.append(box)
+            continue
         if n == 0:
-            raise PhotoError("a screen's dots can't be read: is something in front of the middle of a screen?")
+            continue  # something bright that isn't a panel: a lamp, a window, a reflection
         if n in found.screens:
             raise PhotoError(f"two screens show {n} dot{'s' * (n > 1)}: is the photo pattern from this layout?")
-        found.screens[n] = _quad(m, x0, y0)
-    if not found.screens:
-        raise PhotoError("no screen is fully in the photo" if found.cut_off else
-                         "found no screens in the photo: is it a photo of the screens showing the photo pattern?")
+        found.screens[n] = _refine(g, _quad(m, x0, y0))
     return found
 
 
@@ -523,7 +640,7 @@ def analyse(paths, raw: dict) -> Fit:
     if isinstance(paths, (str, Path)):
         paths = [paths]
     names = [m.name for m in configuration_from_dict(raw).monitors]
-    loaded, observations = [], []
+    loaded, observations, founds, summary = [], [], [], []
     for path in paths:
         photo = load_photo(path)
         try:
@@ -535,10 +652,45 @@ def analyse(paths, raw: dict) -> Fit:
             raise PhotoError(f"{Path(path).name}: a screen shows {extra[0]} dots but the layout has "
                              f"{len(names)} monitors: is the photo pattern from this layout?")
         loaded.append(photo)
-        observations.append({names[n - 1]: q for n, q in found.screens.items()})
-    result = fit(raw, observations, [p.size for p in loaded], [p.focal_px for p in loaded])
+        founds.append(found)
+        observations.append({names[n - 1]: q for n, q in sorted(found.screens.items())})
+        got = ", ".join(observations[-1]) or "no complete screen"
+        cut = f" ({found.cut_count} cut off at the edge)" if found.cut_off else ""
+        summary.append(f"{Path(path).name}: {got}{cut}")
+
+    def marked():
+        return [mark_found(p, f, names) for p, f in zip(loaded, founds, strict=True)]
+
+    try:
+        if not any(observations):
+            raise PhotoError("no screen is fully in any photo")
+        result = fit(raw, observations, [p.size for p in loaded], [p.focal_px for p in loaded])
+    except PhotoError as e:
+        raise PhotoError(f"{e}.\nFound: " + "; ".join(summary), marked()) from None
     result.photos = [p.preview for p in loaded]
     return result
+
+
+def mark_found(photo: Photo, found: Found, names: list[str]) -> Image.Image:
+    """A photo with the screens found (green, named) and panels cut off by its edge (orange)."""
+    from PIL import ImageDraw, ImageFont
+    out = photo.preview.convert("RGB").copy()
+    d = ImageDraw.Draw(out)
+    w = max(2, round(max(out.size) / 500))
+    try:
+        font = ImageFont.load_default(size=max(14, max(out.size) // 40))
+    except TypeError:
+        font = ImageFont.load_default()
+    for n, q in found.screens.items():
+        d.polygon([tuple(p) for p in q], outline=(40, 220, 90), width=w)
+        cx, cy = sum(p[0] for p in q) / 4, sum(p[1] for p in q) / 4
+        d.text((cx, cy + max(out.size) / 25), names[n - 1] if n <= len(names) else f"{n} dots",
+               fill=(40, 220, 90), font=font, anchor="mm", stroke_width=2, stroke_fill=(0, 0, 0))
+    for x0, y0, x1, y1 in found.cut_off:
+        d.rectangle((x0, y0, x1 - 1, y1 - 1), outline=(255, 150, 0), width=w)
+        d.text(((x0 + x1) / 2, (y0 + y1) / 2 + max(out.size) / 25), "cut off", fill=(255, 150, 0), font=font,
+               anchor="mm", stroke_width=2, stroke_fill=(0, 0, 0))
+    return out
 
 
 def overlay(fit_result: Fit, index: int = 0) -> Image.Image:
