@@ -100,19 +100,30 @@ def draw(layout: Layout, rect: Rect, size: tuple[int, int], placed: Placed | Non
     return img
 
 
-PHOTO_INSET = 0.05  # the photo pattern's white panel is inset by this share of the screen's shorter side
+PHOTO_INSET = 0.10  # the photo pattern's white panel is inset by this share of the screen's shorter side,
+                    # clear of top bars, docks and the screen's own black border
 
 
 def photo_inset_px(size: tuple[int, int]) -> int:
     return max(2, round(PHOTO_INSET * min(size)))
 
 
-def photo_pattern(size: tuple[int, int]) -> Image.Image:
+def photo_pattern(size: tuple[int, int], number: int = 1) -> Image.Image:
     """For calibrating from a photo: a white panel on black, inset from the screen's
-    edges by a known amount, so each screen is an unmistakable bright quadrilateral."""
+    edges by a known amount, with ``number`` black dots in its middle saying which
+    monitor it is (the first monitor has one dot)."""
     img = Image.new("RGB", size, (0, 0, 0))
     k = photo_inset_px(size)
-    ImageDraw.Draw(img).rectangle((k, k, size[0] - 1 - k, size[1] - 1 - k), fill=(255, 255, 255))
+    d = ImageDraw.Draw(img)
+    d.rectangle((k, k, size[0] - 1 - k, size[1] - 1 - k), fill=(255, 255, 255))
+    pw, ph = size[0] - 2 * k, size[1] - 2 * k
+    dot = min(0.1 * min(pw, ph), 0.5 * pw / (1.8 * number - 0.8))  # the row stays in the middle half
+    gap = 0.8 * dot
+    x = size[0] / 2 - (number * dot + (number - 1) * gap) / 2
+    y = size[1] / 2 - dot / 2
+    for _ in range(number):
+        d.rectangle((round(x), round(y), round(x + dot) - 1, round(y + dot) - 1), fill=(0, 0, 0))
+        x += dot + gap
     return img
 
 

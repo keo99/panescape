@@ -958,7 +958,9 @@ class Project:
         layout = compute_layout(cfg)
 
         def pattern(p, size):
-            return calibrate.photo_pattern(size) if photo else calibrate.draw_placed(layout, p, size)
+            if photo:
+                return calibrate.photo_pattern(size, p.monitor.index + 1)
+            return calibrate.draw_placed(layout, p, size)
         out = self.backgrounds / cfg.name / "calibration"
         out.mkdir(parents=True, exist_ok=True)
         whole = calibrate.preview(layout)

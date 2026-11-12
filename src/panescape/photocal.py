@@ -20,7 +20,6 @@ from __future__ import annotations
 import copy
 import math
 from dataclasses import dataclass, field
-from itertools import permutations
 from pathlib import Path
 
 from PIL import Image, ImageOps
@@ -137,11 +136,23 @@ def _components(mask) -> list:
 
 
 def _fit_line(points):
-    """Total least squares line through points: (point on it, unit direction)."""
+    """A line through edge points, ignoring points that stray from it (something in
+    front of the screen, a notch): (point on it, unit direction)."""
     import numpy as np
     pts = np.asarray(points, dtype=np.float64)
-    c = pts.mean(axis=0)
-    _, _, vt = np.linalg.svd(pts - c, full_matrices=False)
+    keep = np.ones(len(pts), dtype=bool)
+    for _ in range(4):
+        c = pts[keep].mean(axis=0)
+        _, _, vt = np.linalg.svd(pts[keep] - c, full_matrices=False)
+        normal = vt[1]
+        dist = np.abs((pts - c) @ normal)
+        limit = max(1.5, 2.5 * float(np.median(dist[keep])) * 1.4826)
+        new = dist <= limit
+        if new.sum() < max(5, 0.3 * len(pts)) or (new == keep).all():
+            break
+        keep = new
+    c = pts[keep].mean(axis=0)
+    _, _, vt = np.linalg.svd(pts[keep] - c, full_matrices=False)
     return c, vt[0]
 
 
@@ -153,8 +164,7 @@ def _intersect(l1, l2):
     return p + t[0] * d
 
 
-def _quad(runs) -> list[tuple[float, float]]:
-    """The four corners (TL, TR, BR, BL) of a bright quadrilateral, from lines fitted to its edges."""
+def _mask(runs):
     import numpy as np
     y0 = min(r[0] for r in runs)
     y1 = max(r[0] for r in runs) + 1
@@ -163,6 +173,12 @@ def _quad(runs) -> list[tuple[float, float]]:
     m = np.zeros((y1 - y0, x1 - x0), dtype=bool)
     for y, a, b in runs:
         m[y - y0, a - x0:b - x0] = True
+    return m, x0, y0
+
+
+def _quad(m, x0, y0) -> list[tuple[float, float]]:
+    """The four corners (TL, TR, BR, BL) of a bright quadrilateral, from lines fitted to its edges."""
+    import numpy as np
     rows = np.flatnonzero(m.any(axis=1))
     cols = np.flatnonzero(m.any(axis=0))
     left = [(np.argmax(m[r]) + x0, r + y0 + 0.5) for r in rows]                       # pixel edges, continuous
@@ -188,46 +204,67 @@ def _quad(runs) -> list[tuple[float, float]]:
     return [(float(c[0]), float(c[1])) for c in corners]
 
 
-def find_screens(photo: Photo, count: int) -> list[list[tuple[float, float]]]:
-    """The ``count`` largest bright quadrilaterals, as corner lists (TL, TR, BR, BL)."""
+def _dots(m) -> int:
+    """How many dark dots sit in the middle of a white panel: which monitor it is."""
     import numpy as np
+    h, w = m.shape
+    area = int(m.sum())
+    count = 0
+    sizes = []
+    for comp in _components(~m):
+        ys = [r[0] for r in comp]
+        xs0 = [r[1] for r in comp]
+        xs1 = [r[2] for r in comp]
+        if min(ys) == 0 or max(ys) == h - 1 or min(xs0) == 0 or max(xs1) == w:
+            continue  # outside the panel, not a hole in it
+        size = sum(b - a for _, a, b in comp)
+        cy = (min(ys) + max(ys) + 1) / 2
+        cx = (min(xs0) + max(xs1)) / 2
+        bw, bh = max(xs1) - min(xs0), max(ys) - min(ys) + 1
+        if size < 0.0005 * area or not (0.1 * w < cx < 0.9 * w and 0.3 * h < cy < 0.7 * h):
+            continue  # specks, or something in front of the panel away from the middle
+        if not 0.4 < bw / max(bh, 1) < 2.5:
+            continue
+        sizes.append(size)
+        count += 1
+    if sizes and max(sizes) > 4 * np.median(sizes):
+        return 0  # not a row of equal dots: something covers the middle
+    return count
+
+
+@dataclass
+class Found:
+    screens: dict[int, list]        # dot count (1 = first monitor) -> corners (TL, TR, BR, BL)
+    cut_off: int = 0                # panels touching the photo's edge, left out
+
+
+def find_screens(photo: Photo) -> Found:
+    """Every white panel fully in the photo, by the number of dots in it."""
     g = photo.gray
     if float(g.max()) - float(g.min()) < 40:
-        raise PhotoError(f"found no screens in the photo, expected {count}: "
-                         "is it a photo of the screens showing the photo pattern?")
-    mask = g > _otsu(g)
-    comps = _components(mask)
+        raise PhotoError("found no screens in the photo: is it a photo of the screens showing the photo pattern?")
+    comps = _components(g > _otsu(g))
     min_area = 0.002 * g.size
-    big = sorted((c for c in comps if sum(b - a for _, a, b in c) >= min_area),
-                 key=lambda c: -sum(b - a for _, a, b in c))
-    if len(big) < count:
-        raise PhotoError(f"found {len(big)} screen{'s' * (len(big) != 1)} in the photo, expected {count}: "
-                         "is every screen in the frame, showing the photo pattern?")
     h, w = g.shape
-    for c in big[:count]:
+    found = Found({})
+    for c in sorted(comps, key=lambda c: -sum(b - a for _, a, b in c)):
+        if sum(b - a for _, a, b in c) < min_area:
+            break
         if min(r[0] for r in c) <= 1 or max(r[0] for r in c) >= h - 2 or \
                 min(r[1] for r in c) <= 1 or max(r[2] for r in c) >= w - 1:
-            raise PhotoError("a screen is cut off at the edge of the photo: step back or turn the phone "
-                             "so every screen is fully in the frame")
-    quads = [_quad(c) for c in big[:count]]
-    for q in quads:
-        if np.linalg.norm(np.subtract(q[0], q[2])) < 20:
-            raise PhotoError("a screen is too small in the photo to measure")
-    return quads
-
-
-def pair_with_monitors(quads, layout) -> dict[str, list]:
-    """{monitor name: corners}, pairing by arrangement (as the desktop's screens are paired)."""
-    from .backends.base import _normalise
-    names = [p.monitor.name for p in layout]
-    mm = _normalise([(p.active.x + p.active.w / 2, p.active.y + p.active.h / 2) for p in layout])
-    px = _normalise([(sum(x for x, _ in q) / 4, sum(y for _, y in q) / 4) for q in quads])
-
-    def cost(perm):
-        return sum((mm[i][0] - px[j][0]) ** 2 + (mm[i][1] - px[j][1]) ** 2 for i, j in enumerate(perm))
-
-    best = min(permutations(range(len(quads)), len(names)), key=cost)
-    return {names[i]: quads[j] for i, j in enumerate(best)}
+            found.cut_off += 1
+            continue
+        m, x0, y0 = _mask(c)
+        n = _dots(m)
+        if n == 0:
+            raise PhotoError("a screen's dots can't be read: is something in front of the middle of a screen?")
+        if n in found.screens:
+            raise PhotoError(f"two screens show {n} dot{'s' * (n > 1)}: is the photo pattern from this layout?")
+        found.screens[n] = _quad(m, x0, y0)
+    if not found.screens:
+        raise PhotoError("no screen is fully in the photo" if found.cut_off else
+                         "found no screens in the photo: is it a photo of the screens showing the photo pattern?")
+    return found
 
 
 # --------------------------------------------------------------------------- fitting the layout
@@ -240,8 +277,9 @@ class Fit:
     rms_mm: float                   # roughly, on the screens
     worst: tuple[str, float]        # monitor with the largest corner error (mm)
     flat: bool                      # every angle and tilt came out under a degree
-    observed: dict = field(default_factory=dict)   # name -> corners found in the photo
-    predicted: dict = field(default_factory=dict)  # name -> corners the fitted layout puts there
+    observed: list = field(default_factory=list)   # per photo: name -> corners found
+    predicted: list = field(default_factory=list)  # per photo: name -> corners the fitted layout puts there
+    photos: list = field(default_factory=list)     # per photo: the picture (for overlay)
 
 
 def _rodrigues(w):
@@ -282,34 +320,80 @@ def _fitted_keys(cfg) -> list[tuple[str, str]]:
     return keys
 
 
-def fit(raw: dict, corners: dict[str, list], photo_size: tuple[int, int], focal_px: float | None = None,
-        iterations: int = 60) -> Fit:
-    """Adjust ``raw`` (a plain layout dict) so the layout, seen from the fitted eye, matches ``corners``."""
+def _panels(lay) -> dict:
+    """3D corners of each screen's white panel, relative to the first monitor's centre."""
     import numpy as np
 
     from .calibrate import photo_inset_px
+    a = lay.placed[0].active
+    origin = np.array([a.x + a.w / 2, a.y + a.h / 2, 0.0])
+    out = {}
+    for p in lay:
+        tl, tr, br, bl = (np.array(c) - origin for c in p.corners3d)
+        pw, ph = p.monitor.pixels
+        k = photo_inset_px((pw, ph))
+        u0, v0 = k / pw, k / ph
+        out[p.monitor.name] = [tl + u * (tr - tl) + v * (bl - tl)
+                               for u, v in ((u0, v0), (1 - u0, v0), (1 - u0, 1 - v0), (u0, 1 - v0))]
+    return out
+
+
+def _pose_from(corners3, seen, f, size):
+    """Camera rotation and centre from one rectangle's 3D corners and where a photo shows them."""
+    import numpy as np
+
+    from .perspective import solve_homography
+    p0, p1, _, p3 = corners3
+    wx, wy = float(np.linalg.norm(p1 - p0)), float(np.linalg.norm(p3 - p0))
+    ex, ey = (p1 - p0) / wx, (p3 - p0) / wy
+    e = np.column_stack([ex, ey, np.cross(ex, ey)])
+    hm = np.array(solve_homography([(0, 0), (wx, 0), (wx, wy), (0, wy)], [tuple(c) for c in seen])).reshape(3, 3)
+    cx, cy = size[0] / 2, size[1] / 2
+    b = np.array([[1 / f, 0, -cx / f], [0, 1 / f, -cy / f], [0, 0, 1]]) @ hm
+    lam = 1 / np.linalg.norm(b[:, 0])
+    if (lam * b[:, 2])[2] < 0:
+        lam = -lam
+    a1, a2, t = lam * b[:, 0], lam * b[:, 1], lam * b[:, 2]
+    u, _, vt = np.linalg.svd(np.column_stack([a1, a2, -np.cross(a1, a2)]) @ e.T)  # M = R . FLIP, det -1
+    m = u @ vt
+    if np.linalg.det(m) > 0:
+        m = u @ np.diag([1, 1, -1]) @ vt
+    rot = m @ np.array(FLIP)
+    centre = p0 - m.T @ t
+    return rot, centre
+
+
+def fit(raw: dict, photos: list[dict], sizes: list, focals: list | None = None, iterations: int = 60) -> Fit:
+    """Adjust ``raw`` (a plain layout dict) so the layout, seen from the photos' cameras, matches them.
+
+    ``photos``: per photo, {monitor name: corners found}. All photos are taken from
+    the same seat, each with its own direction and zoom; every monitor must be in
+    one of them, and each photo must share a monitor with one fitted before it."""
+    import numpy as np
+
     from .config import configuration_from_dict
     from .layout import compute_layout
 
+    focals = focals or [None] * len(photos)
     base = copy.deepcopy(raw)
     base["viewer"] = dict(base.get("viewer") or {}) or {"distance": 600}
     cfg0 = configuration_from_dict(base)
+    names = [m.name for m in cfg0.monitors]
+    seen = set().union(*(set(p) for p in photos)) if photos else set()
+    missing_names = [n for n in names if n not in seen]
+    if missing_names:
+        raise PhotoError(f"{', '.join(missing_names)} {'is' if len(missing_names) == 1 else 'are'} in none of the "
+                         "photos: every screen must be fully in at least one")
     keys = _fitted_keys(cfg0)
     by_name = {m.name: m for m in cfg0.monitors}
 
     def current(name, key):
         m = by_name[name]
-        if key == "position_x":
-            return m.position[0]
-        if key == "position_y":
-            return m.position[1]
+        if key in ("position_x", "position_y"):
+            return m.position[0 if key.endswith("x") else 1]
         return float(getattr(m, key))
 
-    w, h = photo_size
-    cx, cy = w / 2, h / 2
-    f0 = focal_px or 0.75 * max(w, h)
-
-    def build(vals, viewer):
+    def build(vals):
         doc = copy.deepcopy(base)
         es = {str(e.get("name") or f"monitor{i + 1}"): e for i, e in enumerate(doc["monitors"])}
         for (name, key), v in zip(keys, vals, strict=True):
@@ -320,156 +404,160 @@ def fit(raw: dict, corners: dict[str, list], photo_size: tuple[int, int], focal_
                 e["position"] = pos
             else:
                 e[key] = float(v)
-        doc["viewer"] = {"distance": float(viewer[0]), "height": float(viewer[1]), "offset": float(viewer[2])}
-        return doc
+        return compute_layout(configuration_from_dict(doc))
 
-    def targets(lay):
-        """3D corners of each screen's white panel, and the eye, in layout coordinates."""
-        out = {}
-        for p in lay:
-            tl, tr, br, bl = (np.array(c) for c in p.corners3d)
-            pw, ph = p.monitor.pixels
-            k = photo_inset_px((pw, ph))
-            u0, v0 = k / pw, k / ph
-            out[p.monitor.name] = [tl + u * (tr - tl) + v * (bl - tl)
-                                   for u, v in ((u0, v0), (1 - u0, v0), (1 - u0, 1 - v0), (u0, 1 - v0))]
-        return out
-
-    def project(lay, rot, f):
-        eye = np.array(lay.eye)
-        m = rot @ np.array(FLIP)
-        pts = {}
-        for name, corners3 in targets(lay).items():
-            q = []
-            for c in corners3:
-                v = m @ (c - eye)
-                if v[2] <= 1e-6:
-                    raise PhotoError("behind the camera")
-                q.append((cx + f * v[0] / v[2], cy + f * v[1] / v[2]))
-            pts[name] = q
-        return pts
-
-    # --- start: the eye from the first monitor's shape in the photo (a plane's pose from a homography)
-    lay0 = compute_layout(cfg0)
-    anchor = lay0.placed[0]
-    a = anchor.active
-    from .perspective import solve_homography
-    t0 = targets(lay0)[anchor.monitor.name]
-    hmat = np.array(solve_homography([(float(c[0]), float(c[1])) for c in t0], corners[anchor.monitor.name]))
-    hmat = hmat.reshape(3, 3)
-    kinv = np.array([[1 / f0, 0, -cx / f0], [0, 1 / f0, -cy / f0], [0, 0, 1]])
-    b = kinv @ hmat
-    lam = 1 / np.linalg.norm(b[:, 0])
-    if (lam * b[:, 2])[2] < 0:
-        lam = -lam
-    m1, m2, t = lam * b[:, 0], lam * b[:, 1], lam * b[:, 2]
-    m3 = -np.cross(m1, m2)  # M = R . FLIP has determinant -1
-    u, _, vt = np.linalg.svd(np.column_stack([m1, m2, m3]) @ np.array(FLIP))
-    rot = u @ vt
-    mm = rot @ np.array(FLIP)
-    eye = -mm.T @ t  # camera centre in the anchor plane's coordinates (z = distance)
-    acx, acy = a.x + a.w / 2, a.y + a.h / 2
-    viewer0 = (max(150.0, float(eye[2])), acy - float(eye[1]), float(eye[0]) - acx)
-
-    vals = [current(n, k) for n, k in keys]
-    params = np.array(vals + list(viewer0) + list(_unrodrigues(rot)) + [f0], dtype=np.float64)
     nk = len(keys)
-    obs = np.array([c for name in (p.monitor.name for p in lay0) for c in corners[name]]).ravel()
+    vals = np.array([current(n, k) for n, k in keys], dtype=np.float64)
+    order: list[int] = []
 
-    def residuals(pv):
-        doc = build(pv[:nk], pv[nk:nk + 3])
-        lay = compute_layout(configuration_from_dict(doc))
-        pts = project(lay, _rodrigues(pv[nk + 3:nk + 6]), pv[nk + 6])
-        pred = np.array([c for p in lay for c in pts[p.monitor.name]]).ravel()
-        prior = []
-        if focal_px:
-            prior.append((pv[nk + 6] - focal_px) / (0.05 * focal_px))  # trust the EXIF zoom to ~5 %
-        return np.concatenate([pred - obs, np.array(prior)]), lay, pts
+    def residuals(pv, used):
+        lay = build(pv[:nk])
+        panels = _panels(lay)
+        res, pred = [], []
+        for slot, i in enumerate(used):
+            c = pv[nk + 7 * slot: nk + 7 * slot + 7]
+            m = _rodrigues(c[:3]) @ np.array(FLIP)
+            centre, f = c[3:6], c[6]
+            cx, cy = sizes[i][0] / 2, sizes[i][1] / 2
+            shown = {}
+            for name, found in photos[i].items():
+                q = []
+                for corner3, (ox, oy) in zip(panels[name], found, strict=True):
+                    v = m @ (corner3 - centre)
+                    if v[2] <= 1e-6:
+                        raise PhotoError("behind the camera")
+                    x, y = cx + f * v[0] / v[2], cy + f * v[1] / v[2]
+                    q.append((x, y))
+                    res += [x - ox, y - oy]
+                shown[name] = q
+            pred.append(shown)
+            if focals[i]:
+                res.append((f - focals[i]) / (0.05 * focals[i]))  # trust the EXIF zoom to ~5 %
+        return np.array(res), pred
 
-    steps = np.array([0.05 if k[1] not in ("angle", "tilt") else 0.02 for k in keys]
-                     + [0.5, 0.5, 0.5] + [1e-5] * 3 + [0.5])
-    damping = 1e-3
-    r, lay, pts = residuals(params)
-    cost = float(r @ r)
-    for _ in range(iterations):
-        jac = np.empty((r.size, params.size))
-        for j in range(params.size):
-            d = np.zeros_like(params)
-            d[j] = steps[j]
-            try:
-                jac[:, j] = (residuals(params + d)[0] - r) / steps[j]
-            except (PhotoError, ValueError):
-                jac[:, j] = 0.0
-        jtj, jtr = jac.T @ jac, jac.T @ r
-        improved = False
-        for _ in range(10):
-            delta = np.linalg.solve(jtj + damping * np.diag(np.diag(jtj) + 1e-9), -jtr)
-            try:
-                r2, lay2, pts2 = residuals(params + delta)
-            except (PhotoError, ValueError):
+    def solve(pv, used):
+        steps = np.array([0.05 if k[1] not in ("angle", "tilt") else 0.02 for k in keys]
+                         + [1e-5, 1e-5, 1e-5, 0.5, 0.5, 0.5, 0.5] * len(used))
+        damping = 1e-3
+        r, pred = residuals(pv, used)
+        cost = float(r @ r)
+        for _ in range(iterations):
+            jac = np.empty((r.size, pv.size))
+            for j in range(pv.size):
+                d = np.zeros_like(pv)
+                d[j] = steps[j]
+                try:
+                    jac[:, j] = (residuals(pv + d, used)[0] - r) / steps[j]
+                except (PhotoError, ValueError):
+                    jac[:, j] = 0.0
+            jtj, jtr = jac.T @ jac, jac.T @ r
+            improved, delta = False, np.zeros_like(pv)
+            for _ in range(10):
+                delta = np.linalg.solve(jtj + damping * np.diag(np.diag(jtj) + 1e-9), -jtr)
+                try:
+                    r2, pred2 = residuals(pv + delta, used)
+                except (PhotoError, ValueError):
+                    damping *= 10
+                    continue
+                c2 = float(r2 @ r2)
+                if c2 < cost:
+                    pv, r, pred, cost = pv + delta, r2, pred2, c2
+                    damping = max(damping / 3, 1e-9)
+                    improved = True
+                    break
                 damping *= 10
-                continue
-            c2 = float(r2 @ r2)
-            if c2 < cost:
-                params, r, lay, pts, cost = params + delta, r2, lay2, pts2, c2
-                damping = max(damping / 3, 1e-9)
-                improved = True
+            if not improved or float(np.abs(delta).max()) < 1e-6:
                 break
-            damping *= 10
-        if not improved or float(np.abs(delta).max()) < 1e-6:
-            break
+        return pv, r, pred
 
-    n_obs = obs.size
-    err = np.hypot(*(r[:n_obs].reshape(-1, 2).T))
-    rms_px = float(np.sqrt((err ** 2).mean()))
-    px_per_mm = params[nk + 6] / max(params[nk], 1.0)  # at the first screen's distance
-    per_monitor = {}
-    for i, p in enumerate(lay):
-        per_monitor[p.monitor.name] = float(err[4 * i:4 * i + 4].max() / px_per_mm)
-    worst = max(per_monitor.items(), key=lambda kv: kv[1])
+    # photos one at a time, each starting from a screen already placed: the first monitor first
+    known = {names[0]}
+    todo = list(range(len(photos)))
+    pv = vals
+    while todo:
+        pick = next((i for i in todo if names[0] in photos[i]), None)
+        if pick is None:
+            pick = next((i for i in todo if known & set(photos[i])), None)
+        if pick is None:
+            raise PhotoError("a photo shares no screen with the others: each photo must include a screen "
+                             "from another photo (or the first monitor)")
+        ref = names[0] if names[0] in photos[pick] else next(n for n in names if n in known and n in photos[pick])
+        f0 = focals[pick] or 0.75 * max(sizes[pick])
+        rot, centre = _pose_from(_panels(build(pv[:nk]))[ref], photos[pick][ref], f0, sizes[pick])
+        order.append(pick)
+        todo.remove(pick)
+        pv = np.concatenate([pv, _unrodrigues(rot), centre, [f0]])
+        pv, r, pred = solve(pv, order)
+        known |= set(photos[pick])
+
+    errs, worst_by = [], {}
+    px_mm = []
+    for slot, i in enumerate(order):
+        c = pv[nk + 7 * slot: nk + 7 * slot + 7]
+        k = c[6] / max(float(np.linalg.norm(c[3:6])), 1.0)  # px per mm at the screens' distance
+        px_mm.append(k)
+        for name, found in photos[i].items():
+            e = np.hypot(*(np.array(pred[slot][name]) - np.array(found)).T)
+            errs += list(e / k)
+            worst_by[name] = max(worst_by.get(name, 0.0), float(e.max() / k))
+    rms_mm = float(np.sqrt(np.mean(np.square(errs))))
     out: dict[str, dict] = {}
-    for (name, key), v in zip(keys, params[:nk], strict=True):
+    for (name, key), v in zip(keys, pv[:nk], strict=True):
         out.setdefault(name, {})[key] = round(float(v), 1)
     flat = all(abs(v) < 1.0 for d in out.values() for k, v in d.items() if k in ("angle", "tilt"))
-    viewer = {"distance": round(float(params[nk]), 0), "height": round(float(params[nk + 1]), 0),
-              "offset": round(float(params[nk + 2]), 0)}
-    return Fit(out, viewer, rms_px, rms_px / px_per_mm, worst, flat,
-               observed={k: list(v) for k, v in corners.items()}, predicted=pts)
+    centre = np.mean([pv[nk + 7 * s + 3: nk + 7 * s + 6] for s in range(len(order))], axis=0)
+    viewer = {"distance": round(float(centre[2]), 0), "height": round(float(-centre[1]), 0),
+              "offset": round(float(centre[0]), 0)}
+    predicted = [None] * len(photos)
+    for slot, i in enumerate(order):
+        predicted[i] = pred[slot]
+    return Fit(out, viewer, rms_mm * float(np.mean(px_mm)), rms_mm, max(worst_by.items(), key=lambda kv: kv[1]),
+               flat, observed=[{k: list(v) for k, v in p.items()} for p in photos], predicted=predicted)
 
 
-def analyse(path: str | Path, raw: dict) -> Fit:
-    """Photo file + plain layout dict -> the fitted numbers."""
+def analyse(paths, raw: dict) -> Fit:
+    """Photo file(s) + plain layout dict -> the fitted numbers."""
     from .config import configuration_from_dict
-    from .layout import compute_layout
     if missing():
         raise PhotoError(INSTALL_HINT)
-    photo = load_photo(path)
-    seated = copy.deepcopy(raw)
-    seated["viewer"] = dict(seated.get("viewer") or {}) or {"distance": 600}
-    lay = compute_layout(configuration_from_dict(seated))
-    quads = find_screens(photo, len(lay.placed))
-    corners = pair_with_monitors(quads, lay)
-    result = fit(raw, corners, photo.size, photo.focal_px)
-    result.photo = photo.preview  # type: ignore[attr-defined]
+    if isinstance(paths, (str, Path)):
+        paths = [paths]
+    names = [m.name for m in configuration_from_dict(raw).monitors]
+    loaded, observations = [], []
+    for path in paths:
+        photo = load_photo(path)
+        try:
+            found = find_screens(photo)
+        except PhotoError as e:
+            raise PhotoError(f"{Path(path).name}: {e}") from None
+        extra = [n for n in found.screens if n > len(names)]
+        if extra:
+            raise PhotoError(f"{Path(path).name}: a screen shows {extra[0]} dots but the layout has "
+                             f"{len(names)} monitors: is the photo pattern from this layout?")
+        loaded.append(photo)
+        observations.append({names[n - 1]: q for n, q in found.screens.items()})
+    result = fit(raw, observations, [p.size for p in loaded], [p.focal_px for p in loaded])
+    result.photos = [p.preview for p in loaded]
     return result
 
 
-def overlay(fit_result: Fit, image: Image.Image) -> Image.Image:
-    """The photo with what was found (green) and where the fitted layout puts it (magenta)."""
+def overlay(fit_result: Fit, index: int = 0) -> Image.Image:
+    """A photo with what was found (green) and where the fitted layout puts it (pink)."""
     from PIL import ImageDraw, ImageFont
-    out = image.convert("RGB").copy()
+    out = fit_result.photos[index].convert("RGB").copy()
     d = ImageDraw.Draw(out)
     w = max(2, round(max(out.size) / 600))
     try:
         font = ImageFont.load_default(size=max(14, max(out.size) // 50))
     except TypeError:
         font = ImageFont.load_default()
-    for name, q in fit_result.observed.items():
+    for name, q in fit_result.observed[index].items():
         d.polygon([tuple(p) for p in q], outline=(40, 220, 90), width=w)
         cx = sum(p[0] for p in q) / 4
         cy = sum(p[1] for p in q) / 4
-        d.text((cx, cy), name, fill=(40, 220, 90), font=font, anchor="mm", stroke_width=2, stroke_fill=(0, 0, 0))
-    for q in fit_result.predicted.values():
+        d.text((cx, cy + max(out.size) / 30), name, fill=(40, 220, 90), font=font, anchor="mm",
+               stroke_width=2, stroke_fill=(0, 0, 0))
+    for q in (fit_result.predicted[index] or {}).values():
         for x, y in q:
             d.ellipse((x - 3 * w, y - 3 * w, x + 3 * w, y + 3 * w), outline=(255, 60, 200), width=w)
     return out
