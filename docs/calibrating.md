@@ -1,7 +1,7 @@
 # Calibrating
 
 There are two ways. By eye: put a test pattern on your screens and adjust the
-layout until its lines meet. Or [from a photo](#from-a-photo): take one picture
+layout until its lines meet. Or [from photos](#from-photos): photograph the screens
 from your seat and let panescape measure everything.
 
 ## By Eye
@@ -46,13 +46,14 @@ To make them meet at every height, switch on
 Without a supported desktop, the pattern is written as per-monitor images in
 `backgrounds/<config>/calibration/`.
 
-## From a Photo
+## From Photos
 
 panescape can measure the gaps, the heights, how far each screen is turned or
-tilted, and where your eyes are, from phone photos taken from your seat. It
-needs the `photo` extra ([Installing](install.md#calibrating-from-a-photo)).
+tilted, and where your eyes are, from phone photos taken from your seat: one
+photo if all the screens fit in it, more if they don't. It
+needs the `photo` extra ([Installing](install.md#calibrating-from-photos)).
 
-1. On the Layout tab, press **From a photo…**, then **Show the photo pattern**.
+1. On the Layout tab, press **From photos…**, then **Show the photo pattern**.
    Each screen shows a white panel with dots on black: one dot for the first
    monitor, two for the second, and so on. panescape minimises itself so nothing
    covers the screens; move any other windows off them too.

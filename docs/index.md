@@ -26,8 +26,11 @@ Then follow [Getting Started](getting-started.md).
   model or size, its bezels, the gaps between screens and how high each one sits.
   See [Configuration](configuration.md) and [Layouts](layouts.md).
 - **Calibrates on your screens:** a millimetre test pattern shows where the
-  lines break across bezels, so you can tune the layout until they don't
+  lines break across bezels, so you can tune the layout until they don't. Or
+  photograph the screens from your seat and let panescape measure them
   ([Calibrating](calibrating.md)).
+- **Angled and tilted screens:** screens turned towards you or a laptop leaning
+  back look right from your seat ([Angled and Tilted Screens](angled.md)).
 - **Slideshows that stay in step:** every screen changes at the same moment,
   chosen by tags and filters such as `landscape + water + !night`
   ([Setups and Slideshows](setups.md), [Pictures](pictures.md)).

@@ -1,4 +1,4 @@
-"""Calibrating from a photo: a fake photo of a known desk, taken by a known camera,
+"""Calibrating from photos: fake photos of a known desk, taken by a known camera,
 must give the desk's numbers back."""
 
 import copy

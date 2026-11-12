@@ -39,8 +39,8 @@ Close it with ✕, and bring it back with **Help ▸ Getting started**.
   ([Angled and Tilted Screens](angled.md)). The desk view then shows the desk as
   seen from there.
 - **Show** a picture or the calibration pattern across the desk.
-- **From a photo…** measures the layout from one phone photo taken from your seat
-  ([Calibrating from a photo](calibrating.md#from-a-photo); needs the `photo` extra).
+- **From photos…** measures the layout from phone photos taken from your seat
+  ([Calibrating from photos](calibrating.md#from-photos); needs the `photo` extra).
 - **Calibrate on my screens** puts the [test pattern](calibrating.md) on your
   real monitors and redraws it as you drag or type. Your wallpaper comes back
   when you switch it off or close the window.

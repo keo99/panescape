@@ -784,8 +784,8 @@ class LayoutEditor(QWidget):
         self.guide = QPushButton("How to calibrate")
         self.guide.clicked.connect(self.show_guide)
         bottom.addWidget(self.guide)
-        self.photo_btn = QPushButton("From a photo…")
-        self.photo_btn.setToolTip("Measure the gaps, heights and angles from one photo taken from your seat")
+        self.photo_btn = QPushButton("From photos…")
+        self.photo_btn.setToolTip("Measure the gaps, heights and angles from phone photos taken from your seat")
         self.photo_btn.clicked.connect(self.calibrate_from_photo)
         bottom.addWidget(self.photo_btn)
         self.revert_btn = QPushButton("Revert")
@@ -1427,7 +1427,7 @@ class LayoutEditor(QWidget):
         from .. import photocal
         hint = photocal.missing()
         if hint:
-            QMessageBox.information(self, "Calibrate from a photo", hint)
+            QMessageBox.information(self, "Calibrate from photos", hint)
             return
         if self.doc is None:
             return

@@ -17,7 +17,7 @@ panescape sync                          # re-check tags / pictures / setup.yml a
 panescape tag new.jpg -a landscape      # tag an image (updates a running slideshow)
 panescape tags 'landscape + !night'     # list images matching a filter
 panescape calibrate --watch             # millimetre test pattern while you tune the config
-panescape calibrate --from-photo IMG    # measure the layout from a photo of the photo pattern
+panescape calibrate --from-photo IMG…   # measure the layout from photos of the photo pattern
 panescape status                        # configs, what's been made, what's applied
 panescape setup                         # list the setups in setup.yml (* = active)
 panescape setup evening --apply         # switch to another setup and apply it

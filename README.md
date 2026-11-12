@@ -34,7 +34,8 @@ panescape makes per-monitor images for your own tool
 
 [![The layout editor](https://raw.githubusercontent.com/keo99/panescape/main/docs/images/gui-layout.png)](https://keo99.github.io/panescape/window/)
 
-Describe your desk to scale, calibrate it on your real screens, tag and frame
+Describe your desk to scale (angled screens too), calibrate it on your real screens
+or from phone photos, tag and frame
 your pictures, find new ones on Unsplash, and apply one picture or a
 slideshow that changes every screen at once. A *Getting started* guide walks
 you through it the first time. See [The Window](https://keo99.github.io/panescape/window/).

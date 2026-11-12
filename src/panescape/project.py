@@ -952,7 +952,7 @@ class Project:
 
     def apply_calibration(self, backend, cfg: Configuration, photo: bool = False) -> str:
         """Show the millimetre test pattern for ``cfg`` on the desktop; returns a message.
-        ``photo``: the pattern for calibrating from a photo instead (white panels on black)."""
+        ``photo``: the pattern for calibrating from photos instead (white panels on black)."""
         from . import calibrate
 
         layout = compute_layout(cfg)

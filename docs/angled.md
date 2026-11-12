@@ -82,7 +82,7 @@ Then fine-tune by eye (below).
 
 ## Calibrating from Your Seat
 
-The quickest way is [one photo from your seat](calibrating.md#from-a-photo): it
+The quickest way is [photos from your seat](calibrating.md#from-photos): they
 measures the angles, tilts and your eye position for you. To do it by eye:
 
 Tick **Calibrate on my screens** on the Layout tab, sit where you normally sit, and

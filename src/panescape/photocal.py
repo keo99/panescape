@@ -1,4 +1,4 @@
-"""Calibrating a layout from one photo taken from your seat.
+"""Calibrating a layout from phone photos taken from your seat.
 
 The screens show the photo pattern: a white panel on black, inset by a known
 amount. A phone held where your eyes are sees the desk as you do, so:
@@ -24,7 +24,7 @@ from pathlib import Path
 
 from PIL import Image, ImageOps
 
-INSTALL_HINT = ("Calibrating from a photo needs the 'photo' extra:\n"
+INSTALL_HINT = ("Calibrating from photos needs the 'photo' extra:\n"
                 "    pipx inject panescape numpy pillow-heif\n"
                 "or  pip install 'panescape[photo]'")
 MAX_SIDE = 2400  # px: the photo is analysed at this size (plenty for sub-pixel corners)

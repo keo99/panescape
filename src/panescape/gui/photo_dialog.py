@@ -27,9 +27,9 @@ STEPS = (
     "<ol style='margin-left:-20px'>"
     "<li><b>Show the photo pattern</b>: each screen shows a white panel with dots on black, and "
     "panescape minimises itself. Move any other windows off the screens.</li>"
-    "<li>Sit where you normally sit. Hold your phone <b>where your eyes are</b> and take a photo with "
-    "every screen fully in the frame. If they don't all fit, take two or more photos from the same "
-    "seat, turning the phone: each screen fully in one of them, and each photo sharing a screen with "
+    "<li>Sit where you normally sit, hold your phone <b>where your eyes are</b> and photograph the "
+    "screens. One photo is enough if they all fit in it. If not, take two or more from the same seat, "
+    "turning the phone: every screen fully in at least one photo, and each photo sharing a screen with "
     "another. Dim the room lights if they reflect in the screens.</li>"
     "<li>Bring panescape back (click it in the dock), copy the photos to this computer and "
     "<b>drop them here</b> (or add them).</li>"
@@ -58,7 +58,7 @@ class PhotoDialog(QDialog):
     def __init__(self, editor):
         super().__init__(editor)
         self.editor = editor
-        self.setWindowTitle("Calibrate from a photo")
+        self.setWindowTitle("Calibrate from photos")
         self.setModal(False)
         self.setAcceptDrops(True)
         self.resize(820, 660)

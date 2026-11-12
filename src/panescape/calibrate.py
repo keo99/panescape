@@ -109,7 +109,7 @@ def photo_inset_px(size: tuple[int, int]) -> int:
 
 
 def photo_pattern(size: tuple[int, int], number: int = 1) -> Image.Image:
-    """For calibrating from a photo: a white panel on black, inset from the screen's
+    """For calibrating from photos: a white panel on black, inset from the screen's
     edges by a known amount, with ``number`` black dots in its middle saying which
     monitor it is (the first monitor has one dot)."""
     img = Image.new("RGB", size, (0, 0, 0))

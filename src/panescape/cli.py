@@ -545,9 +545,9 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("--keep", action="store_true", help="with --watch: leave the pattern up when stopping")
     s.add_argument("--restore", action="store_true", help="put back the wallpaper from before calibrating")
     s.add_argument("--photo-pattern", action="store_true",
-                   help="show the pattern for calibrating from a photo (white panels on black)")
+                   help="show the pattern for calibrating from photos (white panels on black)")
     s.add_argument("--from-photo", metavar="PHOTO", nargs="+",
-                   help="measure the layout from one or more photos of the photo pattern, taken from "
+                   help="measure the layout from photos of the photo pattern (one or more), taken from "
                         "your seat (needs the 'photo' extra)")
     s.add_argument("--write", action="store_true", help="with --from-photo: save the results to the layout")
     s.add_argument("--overlay", metavar="FILE",
