@@ -34,6 +34,10 @@ Close it with ✕, and bring it back with **Help ▸ Getting started**.
   offset is measured from. Changing either one keeps the monitor where it is and
   works out the new **raised by** for you. The first choice in **…measured from**
   names the monitor used when you don't pick one.
+- **My screens are angled or tilted**, at the bottom of the form, corrects the
+  picture for screens turned towards you or leaning back, as seen from your seat
+  ([Angled and Tilted Screens](angled.md)). The desk view then shows the desk as
+  seen from there.
 - **Show** a picture or the calibration pattern across the desk.
 - **Calibrate on my screens** puts the [test pattern](calibrating.md) on your
   real monitors and redraws it as you drag or type. Your wallpaper comes back

@@ -14,3 +14,8 @@ monitors:
     gap: 110                    # stand + keyboard area between the frames
     h_align: center             # measure between the centres...
     h_pos: -40                  # ...the laptop is 40 mm left of the monitor's centre
+    # A laptop screen usually leans back. To correct for that as seen from your
+    # seat, add a viewer section at the top (see angled-wings.yml), e.g.
+    #   viewer: {distance: 600, height: -150}
+    # and give the laptop its tilt here:
+    # tilt: 25                  # degrees leaning back from upright

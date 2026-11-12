@@ -34,6 +34,8 @@ monitors:
     v_align: top
 ```
 
+Screens turned towards you or tilted back: see [Angled and Tilted Screens](angled.md).
+
 Other examples: [a laptop under a monitor](https://github.com/keo99/panescape/blob/main/examples/configurations/laptop-under-monitor.yml),
 [portrait-landscape-portrait](https://github.com/keo99/panescape/blob/main/examples/configurations/portrait-landscape-portrait.yml).
 

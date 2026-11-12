@@ -25,6 +25,7 @@ CACHE = HERE / ".cache"
 PHOTO_URL = ("https://upload.wikimedia.org/wikipedia/commons/f/f1/"
              "Panorama_of_the_valley_of_the_Triglav_mountain_massif.jpg")
 CONFIG = ROOT / "examples" / "configurations" / "portrait-landscape-portrait.yml"
+ANGLED = ROOT / "examples" / "configurations" / "angled-wings.yml"
 WIDTH = 1600
 BG, HOUSING, EDGE, TEXT = (246, 246, 244), (38, 38, 42), (70, 70, 76), (30, 30, 30)
 
@@ -113,6 +114,9 @@ def main() -> None:
 
     mapping = Mapping(src, layout.canvas, CropSpec())
     render_preview(src, mapping, layout, width_px=WIDTH).save(OUT / "preview.jpg", quality=85, optimize=True)
+    angled = compute_layout(load_configuration(ANGLED))
+    render_preview(src, Mapping(src, angled.canvas, CropSpec()), angled, width_px=WIDTH).save(
+        OUT / "angled.jpg", quality=85, optimize=True)
     gui_screenshot(photo())
     for f in sorted(OUT.glob("*.*g")):
         print(f"{f.relative_to(ROOT)}  {f.stat().st_size // 1024} KiB")

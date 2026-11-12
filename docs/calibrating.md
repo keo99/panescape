@@ -32,9 +32,10 @@ across the bezels. To fix it:
 4. **Check.** The diagonals and the circle should now be straight and continuous.
 
 **Angled screens:** if your outer screens are turned or tilted towards you,
-they don't lie in one plane, so the ruler readings don't line up exactly.
-Instead, tune from your seat, matching lines near eye level. Lines far above or
-below that height will drift slightly on the angled screens.
+they don't lie in one plane. Lines then only meet at eye level, and drift apart
+above and below it. Tune the gaps and heights using the lines near eye level.
+To make them meet at every height, switch on
+[Angled and Tilted Screens](angled.md) and calibrate from your seat.
 
 Without a supported desktop, the pattern is written as per-monitor images in
 `backgrounds/<config>/calibration/`.

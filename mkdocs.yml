@@ -51,6 +51,7 @@ nav:
   - Your Desk:
       - Configuration: configuration.md
       - Layouts: layouts.md
+      - Angled and Tilted Screens: angled.md
       - Calibrating: calibrating.md
       - Desktops: desktops.md
   - Development: development.md

@@ -1,0 +1,32 @@
+# The desk from portrait-landscape-portrait.yml with the two outer screens
+# turned towards you, seen from one seat. The 'viewer' section switches the
+# correction on; without it, 'angle' and 'tilt' are ignored and the desk is
+# treated as flat. Lengths are mm unless a unit is given.
+name: angled-wings
+viewer:
+  distance: 650               # from your eyes straight to the first (centre) screen
+  height: 0                   # your eyes above (+) or below (-) its centre
+  offset: 0                   # your eyes right (+) or left (-) of its centre
+monitors:
+  - name: centre              # first: the other screens' angles are measured from it
+    model: Dell P2425H
+
+  - name: left
+    model: Samsung U28E590
+    rotation: portrait-right
+    left_of: centre
+    gap: 0                    # mm of air between the frames; bezels are added on top
+    v_pos: 20                 # its centre is 20 mm above the centre screen's
+    angle: 30                 # degrees turned towards you (0 = flat with the centre screen)
+
+  - name: right
+    model: Samsung U28E590
+    rotation: portrait-left
+    right_of: centre
+    gap: 0
+    v_pos: 20
+    angle: 30
+    # tilt: 5                 # degrees leaning back from upright (top further away)
+
+crop:
+  anchor: center
