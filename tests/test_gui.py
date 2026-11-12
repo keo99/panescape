@@ -208,3 +208,23 @@ def test_measured_from_names_the_real_default_and_changes_keep_monitors_in_place
     assert _housings(ed) == before
     centre = ed.monitors()[1]
     assert centre["v_align"] == "top" and f.v_pos.value() == centre["v_pos"] < -20  # its top is further down
+
+
+def test_angled_screens_switch_writes_the_viewer_and_angles(window):
+    ed = window.layout_editor
+    assert not ed.seat.on.isChecked() and not ed.form.angle_box.isVisibleTo(ed.form)
+    ed.seat.on.setChecked(True)
+    assert ed.doc["viewer"] == {"distance": 600}
+    assert list(ed.doc).index("viewer") < list(ed.doc).index("monitors")
+    assert ed.form.angle_box.isVisibleTo(ed.form)
+    ed.list.setCurrentRow(2)
+    ed.form.angle.setValue(25)
+    assert ed.monitors()[2]["angle"] == 25
+    assert ed.layout_.placed[2].warp is not None
+    ed.seat.height.setValue(-40)
+    assert ed.doc["viewer"] == {"distance": 600, "height": -40}
+    ed.list.setCurrentRow(0)
+    assert not ed.form.angle_row.isVisibleTo(ed.form)  # the anchor has no angle of its own
+    ed.seat.on.setChecked(False)
+    assert "viewer" not in ed.doc and all(p.warp is None for p in ed.layout_.placed)
+    assert ed.monitors()[2]["angle"] == 25  # kept for when it's switched back on

@@ -1,5 +1,8 @@
 """The desk drawn to scale: housings, lit areas, and an optional picture across them.
 
+With angled screens (a layout with a viewer) the desk is drawn as seen from the
+seat: angled screens appear as the shapes they make from there.
+
 Click a monitor to select it. Drag it (or use the arrow keys) to move it:
 the editor turns the movement into gap / v_pos / h_pos changes.
 """
@@ -9,7 +12,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from PySide6.QtCore import QPointF, QRectF, Qt, Signal
-from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPainterPath, QPen
+from PySide6.QtGui import QColor, QFont, QImage, QPainter, QPainterPath, QPen, QPolygonF
 from PySide6.QtWidgets import QSizePolicy, QWidget
 
 from ..layout import Layout, Rect
@@ -85,8 +88,9 @@ class DeskView(QWidget):
     def _bounds(self) -> Rect | None:
         if not self.layout_:
             return None
-        xs = [v for p in self.layout_ for v in (p.outer.x, p.outer.x1)]
-        ys = [v for p in self.layout_ for v in (p.outer.y, p.outer.y1)]
+        pts = [c for p in self.layout_ for c in p.outer_outline()]
+        xs = [x for x, _ in pts]
+        ys = [y for _, y in pts]
         return Rect(min(xs), min(ys), max(xs) - min(xs), max(ys) - min(ys))
 
     def _transform(self):
@@ -105,6 +109,10 @@ class DeskView(QWidget):
     def _rect(self, r: Rect, t) -> QRectF:
         k, ox, oy = t
         return QRectF(ox + r.x * k, oy + r.y * k, r.w * k, r.h * k)
+
+    def _poly(self, points, t) -> QPolygonF:
+        k, ox, oy = t
+        return QPolygonF([QPointF(ox + x * k, oy + y * k) for x, y in points])
 
     def _to_mm(self, pos: QPointF, t) -> tuple[float, float]:
         k, ox, oy = t
@@ -127,7 +135,7 @@ class DeskView(QWidget):
         if not t or not self.layout_:
             return -1
         for p in reversed(self.layout_.placed):
-            if self._rect(p.outer, t).contains(pos):
+            if self._poly(p.outer_outline(), t).containsPoint(pos, Qt.OddEvenFill):
                 return p.monitor.index
         return -1
 
@@ -153,10 +161,17 @@ class DeskView(QWidget):
         for p in lay:
             qp.setPen(QPen(OUTLINE, 1))
             qp.setBrush(HOUSING)
-            qp.drawRoundedRect(self._rect(p.outer, t), 3, 3)
+            if p.quad:
+                qp.drawPolygon(self._poly(p.outer_outline(), t))
+            else:
+                qp.drawRoundedRect(self._rect(p.outer, t), 3, 3)
         lit = QPainterPath()
         for p in lay:
-            lit.addRect(self._rect(p.active, t))
+            if p.quad:
+                lit.addPolygon(self._poly(p.quad, t))
+                lit.closeSubpath()
+            else:
+                lit.addRect(self._rect(p.active, t))
         qp.fillPath(lit, LIT)
         if self.image is not None and not self.image.isNull():
             if self.image_is_pattern:   # drawn for exactly the canvas
@@ -176,11 +191,14 @@ class DeskView(QWidget):
         big.setBold(True)
         for p in lay if self.labels else []:
             m = p.monitor
-            r = self._rect(p.active, t)
+            r = self._poly(p.outline(), t).boundingRect()
             if m.index == self.sel:
                 qp.setPen(QPen(ACCENT, 3))
                 qp.setBrush(Qt.NoBrush)
-                qp.drawRect(self._rect(p.outer, t).adjusted(-2, -2, 2, 2))
+                if p.quad:
+                    qp.drawPolygon(self._poly(p.outer_outline(), t))
+                else:
+                    qp.drawRect(self._rect(p.outer, t).adjusted(-2, -2, 2, 2))
             # label with a dark backing so it reads over pictures
             lines = [(m.name, big), (f"{m.pixels[0]}×{m.pixels[1]}", small),
                      (f"{p.active.w:.0f} × {p.active.h:.0f} mm", small)]
@@ -200,12 +218,15 @@ class DeskView(QWidget):
             if m.index == 0:
                 qp.setPen(MUTED)
                 qp.setFont(small)
-                qp.drawText(self._rect(p.outer, t).adjusted(4, 2, -4, -2), Qt.AlignTop | Qt.AlignLeft, "⚓")
+                qp.drawText(self._poly(p.outer_outline(), t).boundingRect().adjusted(4, 2, -4, -2),
+                            Qt.AlignTop | Qt.AlignLeft, "⚓")
 
         # footer: size of the desk + status
         qp.setFont(self.font())
         b = self._bounds()
         footer = f"desk {b.w:.0f} × {b.h:.0f} mm  ·  picture area {lay.canvas.w:.0f} × {lay.canvas.h:.0f} mm"
+        if lay.eye:
+            footer = f"seen from your seat, {lay.eye[2]:.0f} mm away  ·  " + footer
         if self.framing and self.image is not None:
             footer = (f"zoom {self.crop.zoom:.2f}×  ·  drag the picture to move it, scroll to zoom")
         elif self.sel > 0:

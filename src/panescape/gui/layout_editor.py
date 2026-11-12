@@ -19,6 +19,7 @@ from PySide6.QtWidgets import (
     QComboBox,
     QDialog,
     QDialogButtonBox,
+    QDoubleSpinBox,
     QFormLayout,
     QGridLayout,
     QGroupBox,
@@ -58,7 +59,7 @@ RESOLUTIONS = ["3840x2160", "2560x1440", "1920x1080", "1920x1200", "2560x1600", 
 # where keys go in a monitor entry when the editor adds them
 KEY_ORDER = ["name", "model", "size", "active_area", "resolution", "rotation", "orientation", "bezel",
              *ATTACH, "position", "gap", "v_align", "v_pos", "v_ref", "h_align", "h_pos", "h_ref",
-             "connector", "serial", "product", "vendor"]
+             "angle", "tilt", "connector", "serial", "product", "vendor"]
 REFERENCE_KEYS = (*ATTACH, "v_ref", "h_ref")
 
 
@@ -247,6 +248,24 @@ class MonitorForm(QWidget):
         pl.addWidget(self.place_form)
         outer.addWidget(self.place_box)
 
+        # --- angled screens (only with "My screens are angled" on)
+        self.angle_box = QGroupBox("Angle (as seen from your seat)")
+        f = QFormLayout(self.angle_box)
+        self.angle = _degree_spin()
+        self.angle.setToolTip("How far this screen is turned to face you, compared with the first monitor.\n"
+                              "0 = flat with it. Not sure? Measure how much closer its far edge is.")
+        self.angle.valueChanged.connect(lambda v: self._emit({"angle": number(v) or None}))
+        self.angle_row = _with_button(self.angle, "From mm…", self._angle_from_mm)
+        self.angle_label = QLabel("Turned towards you")
+        f.addRow(self.angle_label, self.angle_row)
+        self.tilt = _degree_spin()
+        self.tilt.setToolTip("How far the screen leans back from upright (top further away).\n"
+                             "A laptop screen often leans back 20–30°.")
+        self.tilt.valueChanged.connect(lambda v: self._emit({"tilt": number(v) or None}))
+        f.addRow("Leaning back", _with_button(self.tilt, "From mm…", self._tilt_from_mm))
+        outer.addWidget(self.angle_box)
+        self.angle_box.setVisible(False)
+
         # --- matching to the desktop's outputs
         g = QGroupBox("Which desktop output is this? (optional)")
         f = QFormLayout(g)
@@ -272,6 +291,11 @@ class MonitorForm(QWidget):
         self._loading = True
         try:
             self.index, self.entry = index, entry
+            self._mon = mon
+            self.angle.setValue(mon.angle if mon else _num_deg(entry.get("angle")))
+            self.tilt.setValue(mon.tilt if mon else _num_deg(entry.get("tilt")))
+            for w in (self.angle_row, self.angle_label):
+                w.setVisible(index != 0)  # the first monitor is what the others' angles are measured from
             self.name.setText(str(entry.get("name", "")))
             known = models.lookup(entry.get("model"))
             self.model.setEditText(known["model"].title() if known else str(entry.get("model") or ""))
@@ -373,6 +397,32 @@ class MonitorForm(QWidget):
             w.setVisible(mode == "position")
 
     # ------------------------------------------------------------------ edits
+    def set_angled(self, on: bool) -> None:
+        self.angle_box.setVisible(on)
+
+    def _angle_from_mm(self) -> None:
+        w = self._housing()[0]
+        d, ok = QInputDialog.getDouble(
+            self, "Angle from a measurement",
+            f"How much closer to you is this screen's far edge than its near edge? (mm)\n"
+            f"Measure straight towards you, e.g. from the front edge of the desk.\n"
+            f"Its housing is {w:.0f} mm wide.", 0, 0, max(w, 1), 1)
+        if ok:
+            self.angle.setValue(_degrees(d, w))
+
+    def _tilt_from_mm(self) -> None:
+        h = self._housing()[1]
+        d, ok = QInputDialog.getDouble(
+            self, "Tilt from a measurement",
+            f"How much further back is this screen's top edge than its bottom edge? (mm)\n"
+            f"Its housing is {h:.0f} mm tall.", 0, -max(h, 1), max(h, 1), 1)
+        if ok:
+            self.tilt.setValue(_degrees(d, h))
+
+    def _housing(self) -> tuple[float, float]:
+        mon = getattr(self, "_mon", None)
+        return mon.outer if mon else (500.0, 300.0)
+
     def _emit(self, values: dict, structural: bool = False) -> None:
         if not self._loading and self.index >= 0:
             self.edit.emit(values, structural)
@@ -453,6 +503,40 @@ class MonitorForm(QWidget):
             self._emit({k: None for k in (*ATTACH, "position")} | {mode: self.target.currentData()})
 
 
+def _degree_spin() -> QDoubleSpinBox:
+    s = QDoubleSpinBox()
+    s.setRange(-80, 80)
+    s.setDecimals(1)
+    s.setSingleStep(0.5)
+    s.setSuffix("°")
+    s.setKeyboardTracking(False)
+    return s
+
+
+def _with_button(widget: QWidget, text: str, slot) -> QWidget:
+    row = QWidget()
+    h = QHBoxLayout(row)
+    h.setContentsMargins(0, 0, 0, 0)
+    h.addWidget(widget, 1)
+    b = QPushButton(text)
+    b.clicked.connect(slot)
+    h.addWidget(b)
+    return row
+
+
+def _degrees(closer_mm: float, length_mm: float) -> float:
+    """The angle that brings one end of a ``length_mm`` long screen ``closer_mm`` nearer."""
+    import math
+    return round(math.degrees(math.asin(max(-1.0, min(1.0, closer_mm / max(length_mm, 1e-9))))), 1)
+
+
+def _num_deg(v) -> float:
+    try:
+        return float(str(v).replace("°", "").removesuffix("deg")) if v is not None else 0.0
+    except ValueError:
+        return 0.0
+
+
 def _num(v, default: float = 0.0) -> float:
     try:
         return parse_length(v) if v is not None else default
@@ -466,6 +550,73 @@ def _is_number(text: str) -> bool:
         return True
     except ValueError:
         return False
+
+
+class SeatPanel(QGroupBox):
+    """The layout's opt-in for angled screens: where you sit (``viewer:`` in the YAML)."""
+
+    changed = Signal(object)  # dict for viewer:, or None to remove it
+
+    def __init__(self, parent=None):
+        super().__init__("Angled screens", parent)
+        self._loading = False
+        v = QVBoxLayout(self)
+        self.on = QCheckBox("My screens are angled or tilted")
+        self.on.setToolTip("Correct the picture for where you sit, so lines stay straight across\n"
+                           "screens turned towards you or leaning back. Off: the desk is treated as flat.")
+        self.on.toggled.connect(self._toggled)
+        v.addWidget(self.on)
+        self.fields = QWidget()
+        f = QFormLayout(self.fields)
+        f.setContentsMargins(0, 0, 0, 0)
+        note = QLabel("The picture is made to look right from your seat, so measure from your eyes. "
+                      "Then give each monitor its angle below its position.")
+        note.setWordWrap(True)
+        note.setStyleSheet("color: palette(placeholder-text)")
+        f.addRow(note)
+        self.distance = mm_spin(100, 5000, 5, 0)
+        self.distance.setToolTip("From your eyes straight to the first monitor's screen")
+        self.height = mm_spin(-2000, 2000, 5, 0)
+        self.height.setToolTip("Your eyes above (+) or below (−) the first monitor's centre")
+        self.offset = mm_spin(-3000, 3000, 5, 0)
+        self.offset.setToolTip("Your eyes right (+) or left (−) of the first monitor's centre")
+        f.addRow("Eyes to first screen", self.distance)
+        f.addRow("Eyes raised by", self.height)
+        f.addRow("Eyes moved right by", self.offset)
+        for w in (self.distance, self.height, self.offset):
+            w.valueChanged.connect(lambda _v: self._emit())
+        v.addWidget(self.fields)
+        self.fields.setVisible(False)
+
+    def populate(self, viewer) -> None:
+        from ..config import DEFAULT_VIEW_DISTANCE
+        self._loading = True
+        try:
+            on = viewer is not None and viewer is not False
+            d = viewer if isinstance(viewer, dict) else {}
+            self.on.setChecked(on)
+            self.fields.setVisible(on)
+            self.distance.setValue(_num(d.get("distance"), DEFAULT_VIEW_DISTANCE))
+            self.height.setValue(_num(d.get("height")))
+            self.offset.setValue(_num(d.get("offset")))
+        finally:
+            self._loading = False
+
+    def _toggled(self, on: bool) -> None:
+        self.fields.setVisible(on)
+        self._emit()
+
+    def _emit(self) -> None:
+        if self._loading:
+            return
+        if not self.on.isChecked():
+            self.changed.emit(None)
+            return
+        values = {"distance": number(self.distance.value())}
+        for key, w in (("height", self.height), ("offset", self.offset)):
+            if w.value():
+                values[key] = number(w.value())
+        self.changed.emit(values)
 
 
 # =========================================================================== dialogs
@@ -606,7 +757,15 @@ class LayoutEditor(QWidget):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
-        scroll.setWidget(self.form)
+        self.seat = SeatPanel()
+        self.seat.changed.connect(self.set_viewer)
+        side = QWidget()
+        sl = QVBoxLayout(side)
+        sl.setContentsMargins(0, 0, 0, 0)
+        sl.addWidget(self.form)
+        sl.addWidget(self.seat)
+        sl.addStretch(1)
+        scroll.setWidget(side)
         # wide enough for the whole form: with no horizontal scroll bar, anything wider is cut off
         scroll.setMinimumWidth(max(380, self.form.minimumSizeHint().width()
                                    + scroll.verticalScrollBar().sizeHint().width() + 6))
@@ -884,7 +1043,31 @@ class LayoutEditor(QWidget):
         self.desk.set_selected(i)
         self._populate_form()
 
+    def set_viewer(self, values) -> None:
+        """Turn the angled-screen correction on (``viewer:`` with these values) or off."""
+        if self.doc is None:
+            return
+        if values is None:
+            self.doc.pop("viewer", None)
+        else:
+            old = self.doc.get("viewer")
+            if isinstance(old, CommentedMap):
+                for k in list(old):
+                    if k not in values:
+                        del old[k]
+                old.update(values)
+            else:
+                keys = list(self.doc.keys())
+                pos = keys.index("monitors") if "monitors" in keys else len(keys)
+                self.doc.insert(pos, "viewer", CommentedMap(values))
+        self.form.set_angled(values is not None)
+        self._changed(False)
+
     def _populate_form(self) -> None:
+        viewer = self.doc.get("viewer") if self.doc is not None else None
+        self.seat.populate(viewer)
+        self.seat.setEnabled(self.doc is not None)
+        self.form.set_angled(viewer is not None and viewer is not False)
         mons = self.monitors()
         if not (0 <= self.sel < len(mons)):
             self.form.setEnabled(False)
