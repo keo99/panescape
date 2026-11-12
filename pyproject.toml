@@ -27,6 +27,7 @@ Issues = "https://github.com/keo99/panescape/issues"
 
 [project.optional-dependencies]
 gui = ["PySide6-Essentials>=6.5", "keyring>=23"]
+photo = ["numpy>=1.24", "pillow-heif>=0.13"]   # calibrating from a phone photo
 test = ["pytest>=7"]
 dev = ["pytest>=7", "ruff>=0.6"]
 

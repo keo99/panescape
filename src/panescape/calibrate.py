@@ -100,6 +100,22 @@ def draw(layout: Layout, rect: Rect, size: tuple[int, int], placed: Placed | Non
     return img
 
 
+PHOTO_INSET = 0.05  # the photo pattern's white panel is inset by this share of the screen's shorter side
+
+
+def photo_inset_px(size: tuple[int, int]) -> int:
+    return max(2, round(PHOTO_INSET * min(size)))
+
+
+def photo_pattern(size: tuple[int, int]) -> Image.Image:
+    """For calibrating from a photo: a white panel on black, inset from the screen's
+    edges by a known amount, so each screen is an unmistakable bright quadrilateral."""
+    img = Image.new("RGB", size, (0, 0, 0))
+    k = photo_inset_px(size)
+    ImageDraw.Draw(img).rectangle((k, k, size[0] - 1 - k, size[1] - 1 - k), fill=(255, 255, 255))
+    return img
+
+
 def draw_placed(layout: Layout, placed: Placed, size: tuple[int, int]) -> Image.Image:
     """The pattern for one screen. An angled screen (a layout with a viewer) gets the
     pattern as seen through it from the seat, so the lines run straight from there;

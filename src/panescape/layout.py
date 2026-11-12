@@ -43,6 +43,7 @@ class Placed:
     # None when the screen shows its flat rectangle of the picture, as without a viewer.
     warp: tuple | None = None
     quad: list | None = None   # its lit corners on the picture (TL, TR, BR, BL), when warped
+    corners3d: list | None = None  # with a viewer: lit corners in 3D (x, y as the layout, z towards you)
 
     def outline(self) -> list[tuple[float, float]]:
         """The lit area's corners on the picture (TL, TR, BR, BL)."""
@@ -170,6 +171,8 @@ def compute_layout(cfg: Configuration) -> Layout:
         if p.quad:
             p.quad = [(x - x0, y - y0) for x, y in p.quad]
             p.warp = perspective.solve_homography(_local_corners(p), p.quad)
+        if p.corners3d:
+            p.corners3d = [(x - x0, y - y0, z) for x, y, z in p.corners3d]
     if eye:
         eye = (eye[0] - x0, eye[1] - y0, eye[2])
     return Layout(placed, Rect(0.0, 0.0, x1 - x0, y1 - y0), eye)
@@ -213,6 +216,7 @@ def _fold_and_project(cfg: Configuration, placed: list[Placed], order: list[Moni
         pose = poses[p.monitor.name]
         flat = p.outline()
         pts = [pose.point(x, y) for x, y in flat]
+        p.corners3d = pts
         if all(abs(z) < 1e-9 for _, _, z in pts):
             continue  # in the picture's plane: its flat rectangle, exactly as without a viewer
         try:

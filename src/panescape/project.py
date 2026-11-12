@@ -950,11 +950,15 @@ class Project:
             return "panescape wallpaper restored"
         return "calibration finished; set your wallpaper again (e.g. 'panescape apply')"
 
-    def apply_calibration(self, backend, cfg: Configuration) -> str:
-        """Show the millimetre test pattern for ``cfg`` on the desktop; returns a message."""
+    def apply_calibration(self, backend, cfg: Configuration, photo: bool = False) -> str:
+        """Show the millimetre test pattern for ``cfg`` on the desktop; returns a message.
+        ``photo``: the pattern for calibrating from a photo instead (white panels on black)."""
         from . import calibrate
 
         layout = compute_layout(cfg)
+
+        def pattern(p, size):
+            return calibrate.photo_pattern(size) if photo else calibrate.draw_placed(layout, p, size)
         out = self.backgrounds / cfg.name / "calibration"
         out.mkdir(parents=True, exist_ok=True)
         whole = calibrate.preview(layout)
@@ -963,7 +967,7 @@ class Project:
         if backend is None:
             for p in layout:
                 m = p.monitor
-                calibrate.draw_placed(layout, p, m.pixels).save(out / f"{m.index + 1}_{m.name}.png")
+                pattern(p, m.pixels).save(out / f"{m.index + 1}_{m.name}.png")
             return f"no supported desktop: set the per-monitor images in {out} yourself"
         os_layout = backend.get_layout()
         centres = {p.monitor.name: (p.active.x + p.active.w / 2, p.active.y + p.active.h / 2) for p in layout}
@@ -972,7 +976,7 @@ class Project:
 
         def render_for(om, size):
             p = by_connector.get(om.connector)
-            return None if p is None else calibrate.draw_placed(layout, p, size)
+            return None if p is None else pattern(p, size)
 
         stamp = f"{time.strftime('%Y%m%d-%H%M%S')}-{time.time_ns() % 10**6:06d}"
         if getattr(backend, "KIND", "spanned") == "per_output":
@@ -981,7 +985,7 @@ class Project:
                 p = by_connector.get(om.connector)
                 if p is not None:
                     path = out / f"output-{om.connector}-{stamp}.png"
-                    calibrate.draw_placed(layout, p, backend.native_size(om)).save(path, "PNG", compress_level=1)
+                    pattern(p, backend.native_size(om)).save(path, "PNG", compress_level=1)
                     frame[om.connector] = path
             backend.set_outputs(frame, setter=self.load_setup().get("setter"))
             new = set(frame.values())
@@ -993,7 +997,8 @@ class Project:
         for old in [*out.glob("gnome-*.png"), *out.glob("output-*.png")]:
             if old not in new:
                 old.unlink()
-        return (f"{time.strftime('%H:%M:%S')} calibration pattern applied for {cfg.name} "
+        what = "photo pattern" if photo else "calibration pattern"
+        return (f"{time.strftime('%H:%M:%S')} {what} applied for {cfg.name} "
                 f"({', '.join(f'{n}->{om.connector}' for n, om in pairing.items())})")
 
 
