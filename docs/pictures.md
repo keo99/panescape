@@ -32,7 +32,9 @@ In `setup.yml`, `filter:` narrows `images:`. Use `images: all` to filter the who
 | `( … )` | grouping |
 | `city*` | glob on tag names |
 
-Tags are case-insensitive, untagged images match `!x`, and `!*` matches
+Tags are case-insensitive and have no spaces: a two-word tag is joined with a
+hyphen, like `black-hole`. Tags written with spaces in `tags.yml`, or coming from
+Unsplash ("black hole"), are read that way too. Untagged images match `!x`, and `!*` matches
 pictures with no tags at all. Comments you add to `tags.yml` are kept when the
 command line or the window edits it.
 

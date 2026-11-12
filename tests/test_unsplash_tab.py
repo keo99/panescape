@@ -158,3 +158,12 @@ def test_download_without_unsplash_tags(tab):
     tab.settle()
     assert tab.client.fetched_tags is False
     assert "misty, fjord, lake" in tab.after.text()  # search words, then the description ("a lake")
+
+
+def test_suggestions_search_two_word_tags_with_a_space(tab):
+    unsplash.save_key(KEY)
+    tab.load_key()
+    (tab.project.pictures / "tags.yml").write_text("a.png: [black hole]\n")
+    tab.suggest()
+    tab.settle()
+    assert tab.client.searches[0][0] == "black hole"

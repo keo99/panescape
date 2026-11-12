@@ -390,13 +390,16 @@ def library_ids(project) -> set[str]:
 
 
 def clean_tags(photo: dict, limit: int = 8) -> list[str]:
+    from .tags import norm_tag
     out = []
     for t in photo.get("tags") or []:
         title = str(t.get("title") if isinstance(t, dict) else t).strip().lower()
-        if (not title or title in GENERIC_TAGS or GENERIC_WORDS & set(title.split())
-                or len(title) > 30 or title in out):
+        if not title or title in GENERIC_TAGS or GENERIC_WORDS & set(title.split()) or len(title) > 30:
             continue
-        out.append(title)
+        tag = norm_tag(title)  # "black hole" -> black-hole: one tag you can filter by
+        if tag in out:
+            continue
+        out.append(tag)
         if len(out) >= limit:
             break
     return out
@@ -509,7 +512,7 @@ def suggest(client: Client, project, n_tags: int = 3, extra: list[str] | None = 
     score: Counter = Counter()
     rank: dict[str, float] = {}
     for t in favourites:
-        for i, ph in enumerate(client.search(t).get("results", [])):
+        for i, ph in enumerate(client.search(t.replace("-", " ")).get("results", [])):  # black-hole -> "black hole"
             pid = ph.get("id")
             if not pid or pid in have:
                 continue

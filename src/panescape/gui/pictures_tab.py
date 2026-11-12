@@ -175,7 +175,7 @@ class PicturesTab(QWidget):
         pl.addWidget(self.chips_box)
         arow = QHBoxLayout()
         self.add_tag = QLineEdit()
-        self.add_tag.setPlaceholderText("add tags (comma or space separated), Enter")
+        self.add_tag.setPlaceholderText("add tags (comma or space separated; black-hole for two words), Enter")
         self.add_tag.returnPressed.connect(self._add_typed_tags)
         self.completer = QCompleter([])
         self.completer.setCaseSensitivity(Qt.CaseInsensitive)

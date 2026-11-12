@@ -30,7 +30,9 @@ class FilterError(ValueError):
 
 
 def norm_tag(t) -> str:
-    return str(t).strip().lower()
+    """Tags are lower case, with no spaces: a two-word tag is joined with a hyphen
+    ("Black Hole" -> black-hole), so it can be typed in a filter or the tag box."""
+    return re.sub(r"[\s_]+", "-", str(t).strip().lower()).strip("-")
 
 
 def load_tags(path: Path) -> dict[str, set[str]]:
@@ -158,6 +160,15 @@ def _entry_tags(value) -> set[str]:
     return {norm_tag(t) for t in (value or [])}
 
 
+def _tidy(doc) -> None:
+    """Rewrite tags written by hand or by older versions in their normal form
+    (abstract art -> abstract-art)."""
+    for key in list(doc.keys()):
+        value = doc[key]
+        if isinstance(value, list) and any(norm_tag(t) != t for t in value):
+            doc[key] = _tag_list(_entry_tags(value))
+
+
 def edit_tags(path: Path, changes: dict[str, tuple[set[str], set[str]]]) -> list[str]:
     """Add / remove tags on images: ``{file name: (add, remove)}``.
 
@@ -165,6 +176,7 @@ def edit_tags(path: Path, changes: dict[str, tuple[set[str], set[str]]]) -> list
     glob entry (e.g. ``"city-*"``) gives them to it.
     """
     doc = _load_rt(path)
+    _tidy(doc)
     warnings = []
     for name, (add, remove) in changes.items():
         add = {norm_tag(t) for t in add if norm_tag(t)}
@@ -190,6 +202,7 @@ def rename_tag(path: Path, old: str, new: str) -> int:
     """Rename (or, if ``new`` exists, merge into) a tag everywhere. Returns entries changed."""
     old, new = norm_tag(old), norm_tag(new)
     doc = _load_rt(path)
+    _tidy(doc)
     n = 0
     for key in list(doc.keys()):
         tags = _entry_tags(doc[key])
