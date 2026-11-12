@@ -268,6 +268,49 @@ def cmd_tags(args) -> None:
         print("tags: " + ", ".join(f"{t} ({n})" for t, n in sorted(counts.items())))
 
 
+PHOTO_GUIDE = """\
+Each screen now shows a white panel on black. Sit where you normally sit, hold
+your phone where your eyes are, and take a photo with the main (1x) camera,
+every screen fully in the frame. Then copy the photo to this computer and run:
+    panescape calibrate --from-photo PHOTO.jpg            (shows what would change)
+    panescape calibrate --from-photo PHOTO.jpg --write    (saves it to the layout)
+and 'panescape calibrate --restore' to put your wallpaper back."""
+
+
+def _calibrate_from_photo(path: Path, photo: Path, write: bool, overlay: str | None) -> None:
+    from . import photocal
+    from .project import ProjectError
+    hint = photocal.missing()
+    if hint:
+        raise ProjectError(hint)
+    doc = yamledit.load(path)
+    raw = yamledit.plain(doc)
+    try:
+        result = photocal.analyse(photo, raw)
+    except photocal.PhotoError as e:
+        raise ProjectError(f"{photo.name}: {e}") from None
+    print(f"matched the photo to within {result.rms_mm:.1f} mm on average "
+          f"(worst: {result.worst[0]}, {result.worst[1]:.1f} mm)")
+    if overlay:
+        photocal.overlay(result, result.photo).save(overlay)
+        print(f"wrote {overlay} (green: what was found, pink: where the fitted layout puts the corners)")
+    found = photocal.changes(result, raw)
+    if result.flat and "viewer" not in raw:
+        print("your screens came out flat (no angle or tilt over a degree)")
+    if not found:
+        print("the layout already matches the photo")
+        return
+    for name, key, old, new in found:
+        where = f"{name}.{key}" if name else f"viewer.{key}"
+        print(f"  {where:<20} {'(none)' if old is None else old} -> {new}")
+    if write:
+        photocal.apply_changes(doc, found)
+        yamledit.save(path, doc)
+        print(f"saved to {path}")
+    else:
+        print("run again with --write to save these to the layout")
+
+
 def cmd_calibrate(args) -> None:
     from . import calibrate
     proj = _project(args)
@@ -285,9 +328,12 @@ def cmd_calibrate(args) -> None:
         return
 
     path = proj.config_path(args.config)
+    if args.from_photo:
+        _calibrate_from_photo(path, Path(args.from_photo), args.write, args.overlay)
+        return
 
     def build() -> None:
-        print(proj.apply_calibration(be, proj.load_config(str(path))))
+        print(proj.apply_calibration(be, proj.load_config(str(path)), photo=args.photo_pattern))
 
     from .backends.base import competing_tools
     for w in competing_tools():
@@ -298,6 +344,9 @@ def cmd_calibrate(args) -> None:
     except Exception:
         restore()
         raise
+    if args.photo_pattern:
+        print("\n" + PHOTO_GUIDE)
+        return
     print("\n" + calibrate.GUIDE)
     if not args.watch:
         if be is not None:
@@ -481,6 +530,13 @@ def build_parser() -> argparse.ArgumentParser:
                    help="re-apply whenever the configuration file is saved; Ctrl+C restores your wallpaper")
     s.add_argument("--keep", action="store_true", help="with --watch: leave the pattern up when stopping")
     s.add_argument("--restore", action="store_true", help="put back the wallpaper from before calibrating")
+    s.add_argument("--photo-pattern", action="store_true",
+                   help="show the pattern for calibrating from a photo (white panels on black)")
+    s.add_argument("--from-photo", metavar="PHOTO",
+                   help="measure the layout from a photo of the photo pattern, taken from your seat "
+                        "(needs the 'photo' extra)")
+    s.add_argument("--write", action="store_true", help="with --from-photo: save the results to the layout")
+    s.add_argument("--overlay", metavar="FILE", help="with --from-photo: save the photo marked with what was found")
     s.set_defaults(func=cmd_calibrate)
 
     s = sub.add_parser("slideshow", help="sway/Hyprland/KDE: switch slideshow images on schedule "
