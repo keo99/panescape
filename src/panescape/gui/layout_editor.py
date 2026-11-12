@@ -1432,7 +1432,11 @@ class LayoutEditor(QWidget):
         if self.doc is None:
             return
         from .photo_dialog import PhotoDialog
-        PhotoDialog(self).exec()
+        dlg = getattr(self, "_photo_dialog", None)
+        if dlg is None or not dlg.isVisible() and not dlg.waiting:
+            dlg = self._photo_dialog = PhotoDialog(self)  # doesn't block: panescape can be minimised
+        dlg.show()
+        dlg.raise_()
 
     def show_guide(self) -> None:
         from .. import calibrate

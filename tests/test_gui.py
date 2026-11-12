@@ -247,7 +247,7 @@ def test_photo_dialog_measures_and_fills_in_the_layout(window, tmp_path):
     fake_photo(truth, rotvec=(0.02, 0.01, 0), f=700).save(path)
 
     d = PhotoDialog(ed)
-    d.analyse(str(path))
+    d.add([str(path)])
     for _ in range(3):
         QThreadPool.globalInstance().waitForDone(20000)
         QApplication.processEvents()
@@ -258,3 +258,21 @@ def test_photo_dialog_measures_and_fills_in_the_layout(window, tmp_path):
     assert right["angle"] == pytest.approx(25, abs=0.5) and right["gap"] == pytest.approx(4, abs=0.5)
     assert ed.doc["viewer"]["distance"] == pytest.approx(650, abs=10)
     assert ed.dirty and ed.layout_.placed[2].warp is not None
+
+
+def test_photo_dialog_gets_out_of_the_way_while_you_take_the_photo(window):
+    from PySide6.QtCore import Qt
+
+    from panescape.gui.photo_dialog import PhotoDialog
+    ed = window.layout_editor
+    d = PhotoDialog(ed)
+    d.show()
+    assert not d.isModal()
+    window.show()
+    d._pattern_up("pattern applied")          # what happens once the pattern is on the screens
+    QApplication.processEvents()
+    assert not d.isVisible() and window.isMinimized()
+    window.setWindowState(Qt.WindowNoState)   # you bring panescape back from the dock
+    QApplication.processEvents()
+    assert d.isVisible() and not d.waiting
+    d.close()
