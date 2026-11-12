@@ -487,7 +487,10 @@ class Project:
         st = job.source.stat()
         base = [__version__, str(job.source), st.st_size, st.st_mtime_ns, crop.as_dict(),
                 round(layout.canvas.w, 3), round(layout.canvas.h, 3), fmt, quality]
-        return {p.monitor.name: self._hash(base + [p.active.as_tuple(), p.monitor.pixels]) for p in layout}
+        def warp(p):
+            return [round(v, 9) for v in p.warp] if p.warp else None
+        return {p.monitor.name: self._hash(base + [p.active.as_tuple(), p.monitor.pixels]
+                                           + ([warp(p)] if p.warp else [])) for p in layout}
 
     def render(self, cfg: Configuration, job: ImageJob, force: bool = False,
                crop_override: dict | None = None, preview: bool = True) -> Rendered:
@@ -535,7 +538,7 @@ class Project:
                 up = old_monitors[m.name].get("upscale", 1.0)
             else:
                 rendered.skipped = False
-                tile, up = mapping.render(p.active, m.pixels)
+                tile, up = mapping.render_placed(p, m.pixels)
                 save_image(tile, names[m.name], fmt, quality,
                            int(cfg.output.get("png_compression", 1)))
             if up > UPSCALE_WARN:
@@ -544,6 +547,7 @@ class Project:
                 "name": m.name, "slice_key": keys[m.name], "pixels": m.pixels, "rotation": m.rotation,
                 "active_mm": p.active.as_tuple(), "housing_mm": p.outer.as_tuple(),
                 "bezel_mm": m.bezel, "source_box_px": [round(v, 2) for v in mapping.box(p.active)],
+                **({"seen_from_seat_mm": [[round(x, 2), round(y, 2)] for x, y in p.quad]} if p.quad else {}),
                 "upscale": round(up, 3), "notes": m.notes,
             })
         if preview:
@@ -608,7 +612,7 @@ class Project:
                     return im.convert("RGB")
             if mapping is None:
                 mapping = Mapping(load_image(job.source), layout.canvas, crop)
-            tile, _ = mapping.render(placed.active, size)
+            tile, _ = mapping.render_placed(placed, size)
             return tile
 
         img = backend.compose(os_layout, render_for, crop.background)
@@ -959,7 +963,7 @@ class Project:
         if backend is None:
             for p in layout:
                 m = p.monitor
-                calibrate.draw(layout, p.active, m.pixels, p).save(out / f"{m.index + 1}_{m.name}.png")
+                calibrate.draw_placed(layout, p, m.pixels).save(out / f"{m.index + 1}_{m.name}.png")
             return f"no supported desktop: set the per-monitor images in {out} yourself"
         os_layout = backend.get_layout()
         centres = {p.monitor.name: (p.active.x + p.active.w / 2, p.active.y + p.active.h / 2) for p in layout}
@@ -968,7 +972,7 @@ class Project:
 
         def render_for(om, size):
             p = by_connector.get(om.connector)
-            return None if p is None else calibrate.draw(layout, p.active, size, p)
+            return None if p is None else calibrate.draw_placed(layout, p, size)
 
         stamp = f"{time.strftime('%Y%m%d-%H%M%S')}-{time.time_ns() % 10**6:06d}"
         if getattr(backend, "KIND", "spanned") == "per_output":
@@ -977,7 +981,7 @@ class Project:
                 p = by_connector.get(om.connector)
                 if p is not None:
                     path = out / f"output-{om.connector}-{stamp}.png"
-                    calibrate.draw(layout, p.active, backend.native_size(om), p).save(path, "PNG", compress_level=1)
+                    calibrate.draw_placed(layout, p, backend.native_size(om)).save(path, "PNG", compress_level=1)
                     frame[om.connector] = path
             backend.set_outputs(frame, setter=self.load_setup().get("setter"))
             new = set(frame.values())

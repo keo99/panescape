@@ -97,6 +97,8 @@ class Monitor:
     model: str | None = None
     match: dict = field(default_factory=dict)
     notes: list = field(default_factory=list)
+    angle: float = 0.0                   # degrees turned towards the viewer (used only with a viewer)
+    tilt: float = 0.0                    # degrees leaning back from upright, top further away (ditto)
 
     @property
     def portrait(self) -> bool:
@@ -126,6 +128,18 @@ class Monitor:
         return (pw / aw, ph / ah)
 
 
+DEFAULT_VIEW_DISTANCE = 600.0  # mm, a typical arm's length from the screen
+
+
+@dataclass
+class Viewer:
+    """Where your eyes are, relative to the first monitor: turns on the correction
+    for angled and tilted screens (opt-in, ``viewer:`` in the layout)."""
+    distance: float = DEFAULT_VIEW_DISTANCE  # mm in front of the first monitor's screen
+    height: float = 0.0                      # mm above (+) / below (-) its centre
+    offset: float = 0.0                      # mm right (+) / left (-) of its centre
+
+
 @dataclass
 class Configuration:
     name: str
@@ -135,11 +149,13 @@ class Configuration:
     output: dict
     description: str = ""
     raw: dict = field(default_factory=dict)
+    viewer: Viewer | None = None             # None: flat, as panescape always did
 
     def fingerprint(self) -> str:
         data = {
             "monitors": [asdict(m) | {"notes": None} for m in self.monitors],
             "output": self.output,
+            "viewer": asdict(self.viewer) if self.viewer else None,
         }
         return hashlib.sha1(json.dumps(data, sort_keys=True, default=str).encode()).hexdigest()[:12]
 
@@ -255,6 +271,9 @@ def _monitor_from_entry(i: int, entry: dict, defaults: dict) -> Monitor:
     if isinstance(entry.get("match"), dict):
         match.update({k: str(v) for k, v in entry["match"].items()})
 
+    angle = parse_angle(entry.get("angle", 0), f"monitor {name!r}: angle")
+    tilt = parse_angle(entry.get("tilt", 0), f"monitor {name!r}: tilt")
+
     return Monitor(
         name=name,
         index=i,
@@ -274,7 +293,42 @@ def _monitor_from_entry(i: int, entry: dict, defaults: dict) -> Monitor:
         model=model["model"] if model else model_name,
         match=match,
         notes=notes,
+        angle=angle,
+        tilt=tilt,
     )
+
+
+def parse_angle(value, what: str) -> float:
+    """Degrees: 30, 30.5, "30deg" or "30°"."""
+    if value is None or value == "":
+        return 0.0
+    text = str(value).strip().lower().replace("°", "").removesuffix("degrees").removesuffix("deg").strip()
+    try:
+        a = float(text)
+    except ValueError:
+        raise ConfigError(f"{what} must be a number of degrees, not {value!r}") from None
+    if not -80 <= a <= 80:
+        raise ConfigError(f"{what} must be between -80 and 80 degrees")
+    return a
+
+
+def parse_viewer(raw) -> Viewer | None:
+    """``viewer:`` turns on the angled-screen correction; ``viewer: {}`` uses the defaults."""
+    if raw is None or raw is False:
+        return None
+    if raw is True:
+        raw = {}
+    if not isinstance(raw, dict):
+        raise ConfigError("viewer must be a mapping: {distance: mm, height: mm, offset: mm}")
+    unknown = set(raw) - {"distance", "height", "offset"}
+    if unknown:
+        raise ConfigError(f"unknown viewer key {sorted(unknown)[0]!r} (distance, height, offset)")
+    v = Viewer(distance=parse_length(raw.get("distance", DEFAULT_VIEW_DISTANCE)),
+               height=parse_length(raw.get("height", 0) or 0),
+               offset=parse_length(raw.get("offset", 0) or 0))
+    if v.distance < 100:
+        raise ConfigError("viewer distance must be at least 100 mm (from your eyes to the first screen)")
+    return v
 
 
 def load_configuration(path: str | Path) -> Configuration:
@@ -310,6 +364,10 @@ def configuration_from_dict(raw: dict, name: str = "config", path: Path | None =
                 raise ConfigError(f"monitor {m.name!r}: {key} can't refer to itself")
     if mons[0].attach:
         raise ConfigError(f"the first monitor ({mons[0].name!r}) is the anchor; attach the others to it instead")
+    viewer = parse_viewer(raw.get("viewer"))
+    if viewer and mons[0].angle:
+        raise ConfigError(f"the first monitor ({mons[0].name!r}) sets the direction the others' angles are "
+                          "measured from, so it can't have an angle itself; give the others their angles to it")
     return Configuration(
         name=str(name),
         path=path,
@@ -318,4 +376,5 @@ def configuration_from_dict(raw: dict, name: str = "config", path: Path | None =
         output=dict(raw.get("output") or {}),
         description=str(raw.get("description", "")),
         raw=raw,
+        viewer=viewer,
     )

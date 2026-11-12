@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import math
 from dataclasses import dataclass
 from pathlib import Path
 
 from PIL import Image, ImageDraw, ImageFont, ImageOps
 
-from .layout import Layout, Rect
+from . import perspective
+from .layout import Layout, Placed, Rect
 
 Image.MAX_IMAGE_PIXELS = 500_000_000  # allow big panoramas, still guard against bombs
 
@@ -95,6 +97,8 @@ class Mapping:
             padded.paste(image, (pl, pt))
             image, ox, oy = padded, ox + pl, oy + pt
         self.image = image
+        self.background = crop.background
+        self._shrunk_cache: dict[int, Image.Image] = {}
         self.ox, self.oy = ox, oy
         self.canvas = canvas
         self.crop_box = (ox, oy, ox + need_w, oy + need_h)
@@ -114,6 +118,44 @@ class Mapping:
         upscale = max(size[0] / max(box[2] - box[0], 1e-9), size[1] / max(box[3] - box[1], 1e-9))
         return img, upscale
 
+    def render_placed(self, p: Placed, size: tuple[int, int]) -> tuple[Image.Image, float]:
+        """One screen's picture: its flat rectangle, or for an angled screen (``p.warp``)
+        the picture as seen through it from the viewer's seat."""
+        if p.warp is None:
+            return self.render(p.active, size)
+        return self.render_warped(p.warp, (p.active.w, p.active.h), size)
+
+    def render_warped(self, warp, area_mm: tuple[float, float], size: tuple[int, int],
+                      background: str | None = None) -> tuple[Image.Image, float]:
+        """``warp`` maps the screen's lit area (mm from its top-left, ``area_mm``) to the picture."""
+        W, H = size
+        aw, ah = area_mm
+        px_to_mm = (aw / W, 0.0, 0.0, 0.0, ah / H, 0.0, 0.0, 0.0, 1.0)
+        out_to_canvas = perspective.compose(warp, px_to_mm)
+        # source px per screen px, at the corners (the stretch varies across an angled screen)
+        density = [self.scale * perspective.scale_at(out_to_canvas, x, y) for x, y in ((0, 0), (W, 0), (0, H), (W, H))]
+        upscale = 1 / max(min(density), 1e-9)
+        # downscale the source first where it's much denser than the screen, so sampling doesn't alias
+        src, fx, fy = self._shrunk(min(density))
+        canvas_to_src = (self.scale / fx, 0.0, self.ox / fx, 0.0, self.scale / fy, self.oy / fy, 0.0, 0.0, 1.0)
+        m = perspective.compose(canvas_to_src, out_to_canvas)
+        fill = background or self.background
+        img = src.transform(size, Image.Transform.PERSPECTIVE, m[:8], Image.Resampling.BICUBIC, fillcolor=fill)
+        return img, upscale
+
+    def _shrunk(self, factor: float) -> tuple[Image.Image, float, float]:
+        """The source scaled down by a power of two no bigger than ``factor``, and the
+        exact x and y factors (cached: the screens of one picture share them)."""
+        step = 2 ** int(math.floor(math.log2(factor))) if factor >= 2 else 1
+        if step == 1:
+            return self.image, 1.0, 1.0
+        if step not in self._shrunk_cache:
+            w, h = self.image.size
+            self._shrunk_cache[step] = self.image.resize((max(1, round(w / step)), max(1, round(h / step))),
+                                                         Image.Resampling.LANCZOS)
+        img = self._shrunk_cache[step]
+        return img, self.image.width / img.width, self.image.height / img.height
+
 
 def save_image(img: Image.Image, path: Path, fmt: str = "png", quality: int = 95,
                png_compression: int = 1) -> Path:
@@ -131,8 +173,9 @@ def save_image(img: Image.Image, path: Path, fmt: str = "png", quality: int = 95
 
 def render_preview(source: Image.Image, mapping: Mapping, layout: Layout, width_px: int = 2400) -> Image.Image:
     """A to-scale picture of the desk: dimmed full image, housings, lit areas, labels."""
-    xs = [p.outer.x for p in layout] + [p.outer.x1 for p in layout]
-    ys = [p.outer.y for p in layout] + [p.outer.y1 for p in layout]
+    pts = [c for p in layout for c in p.outer_outline()]
+    xs = [x for x, _ in pts]
+    ys = [y for _, y in pts]
     margin = 0.04 * (max(xs) - min(xs))
     vx0, vy0 = min(xs) - margin, min(ys) - margin
     vw, vh = max(xs) - min(xs) + 2 * margin, max(ys) - min(ys) + 2 * margin
@@ -160,11 +203,23 @@ def render_preview(source: Image.Image, mapping: Mapping, layout: Layout, width_
         return (int(round((r.x - vx0) * k)), int(round((r.y - vy0) * k)),
                 int(round((r.x1 - vx0) * k)) - 1, int(round((r.y1 - vy0) * k)) - 1)
 
+    def poly(points):
+        return [((x - vx0) * k, (y - vy0) * k) for x, y in points]
+
+    # angled screens (with a viewer) appear as seen from the seat; flat ones as rectangles
     for p in layout:
-        draw.rectangle(px(p.outer), fill=(40, 40, 44), outline=(90, 90, 96), width=2)
+        if p.quad:
+            draw.polygon(poly(p.outer_outline()), fill=(40, 40, 44), outline=(90, 90, 96), width=2)
+        else:
+            draw.rectangle(px(p.outer), fill=(40, 40, 44), outline=(90, 90, 96), width=2)
+    lit = Image.new("L", size, 0)
+    lit_draw = ImageDraw.Draw(lit)
     for p in layout:
-        x0, y0, x1, y1 = px(p.active)
-        out.paste(full.crop((x0, y0, x1 + 1, y1 + 1)), (x0, y0))
+        if p.quad:
+            lit_draw.polygon(poly(p.quad), fill=255)
+        else:
+            lit_draw.rectangle(px(p.active), fill=255)
+    out.paste(full, (0, 0), lit)
     # outline of the area the image was cropped to
     cb = px(layout.canvas)
     draw.rectangle(cb, outline=(255, 200, 0), width=2)
@@ -173,7 +228,11 @@ def render_preview(source: Image.Image, mapping: Mapping, layout: Layout, width_
     except TypeError:
         font = ImageFont.load_default()
     for p in layout:
-        x0, y0, _, _ = px(p.active)
+        if p.quad:
+            corners = poly(p.quad)
+            x0, y0 = int(min(x for x, _ in corners)), int(min(y for _, y in corners))
+        else:
+            x0, y0, _, _ = px(p.active)
         m = p.monitor
         label = f"{m.name}  {m.pixels[0]}x{m.pixels[1]}"
         draw.text((x0 + 8, y0 + 8), label, fill=(255, 255, 255), font=font,

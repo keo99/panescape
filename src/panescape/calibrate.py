@@ -100,6 +100,31 @@ def draw(layout: Layout, rect: Rect, size: tuple[int, int], placed: Placed | Non
     return img
 
 
+def draw_placed(layout: Layout, placed: Placed, size: tuple[int, int]) -> Image.Image:
+    """The pattern for one screen. An angled screen (a layout with a viewer) gets the
+    pattern as seen through it from the seat, so the lines run straight from there;
+    its rulers are left off (they only make sense on a flat desk)."""
+    if placed.warp is None:
+        return draw(layout, placed.active, size, placed)
+    from . import perspective
+    W, H = size
+    aw, ah = placed.active.w, placed.active.h
+    out_to_canvas = perspective.compose(placed.warp, (aw / W, 0, 0, 0, ah / H, 0, 0, 0, 1))
+    stretch = max(perspective.scale_at(out_to_canvas, x, y) for x, y in ((0, 0), (W, 0), (0, H), (W, H)))
+    density = min(1 / max(stretch, 1e-9), 12.0)  # pattern px per desk mm: about the screen's own
+    xs = [x for x, _ in placed.quad]
+    ys = [y for _, y in placed.quad]
+    box = Rect(min(xs) - 2, min(ys) - 2, max(xs) - min(xs) + 4, max(ys) - min(ys) + 4)
+    pw, ph = max(1, round(box.w * density)), max(1, round(box.h * density))
+    pattern = draw(layout, box, (pw, ph))
+    canvas_to_px = (pw / box.w, 0, -box.x * pw / box.w, 0, ph / box.h, -box.y * ph / box.h, 0, 0, 1)
+    m = perspective.compose(canvas_to_px, out_to_canvas)
+    img = pattern.transform(size, Image.Transform.PERSPECTIVE, m[:8], Image.Resampling.BICUBIC, fillcolor=BG)
+    s = (W / aw + H / ah) / 2
+    _label(ImageDraw.Draw(img), layout, placed, W, H, s)
+    return img
+
+
 def _rulers(d: ImageDraw.ImageDraw, rect: Rect, sx: float, sy: float, s: float) -> None:
     """Edge rulers in desk millimetres (1 mm ticks where the screen is dense enough)."""
     font = _font(round(3.2 * s))
