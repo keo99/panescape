@@ -49,44 +49,52 @@ Without a supported desktop, the pattern is written as per-monitor images in
 ## From a Photo
 
 panescape can measure the gaps, the heights, how far each screen is turned or
-tilted, and where your eyes are, all from one phone photo. It needs the `photo`
-extra ([Installing](install.md#calibrating-from-a-photo)).
+tilted, and where your eyes are, from phone photos taken from your seat. It
+needs the `photo` extra ([Installing](install.md#calibrating-from-a-photo)).
 
 1. On the Layout tab, press **From a photo…**, then **Show the photo pattern**.
-   Each screen shows a white panel on black.
+   Each screen shows a white panel with dots on black: one dot for the first
+   monitor, two for the second, and so on. panescape minimises itself so nothing
+   covers the screens; move any other windows off them too.
 2. Sit where you normally sit. Hold your phone **where your eyes are** and take a
-   photo with the main (1×) camera, with every screen fully in the frame. If room
-   lights reflect in the screens, dim them.
-3. Copy the photo to the computer and drop it onto the window.
+   photo with every screen fully in the frame. If they don't all fit, take two or
+   more photos from the same seat, turning the phone between them. Each screen
+   must be fully in at least one photo, and each photo must share a screen with
+   another. If room lights reflect in the screens, dim them.
+3. Bring panescape back from the dock. The dialog comes back with it. Copy the
+   photos to the computer and drop them onto the dialog.
 
-panescape finds the four corners of every white panel, then adjusts the layout
-until, seen from the camera, each corner lands where the photo shows it. You see
-the photo marked with what it found (green) and where the measured layout puts
-the corners (pink), the average error in millimetres, and a list of the numbers
-it would change. **Use these numbers** puts them in the layout; press **Save** to
-keep them.
+panescape finds the four corners of every white panel and reads its dots to know
+which monitor it is. Then it adjusts the layout until, seen from the phone, each
+corner lands where the photos show it. You see the photos marked with what it
+found (green) and where the measured layout puts the corners (pink), the average
+error in millimetres, and a list of the numbers it would change. **Use these
+numbers** puts them in the layout; press **Save** to keep them.
 
 From the command line:
 
 ```bash
-panescape calibrate --photo-pattern                       # show the pattern
-panescape calibrate --from-photo IMG_1234.jpg             # what would change
-panescape calibrate --from-photo IMG_1234.jpg --write     # save it to the layout
-panescape calibrate --from-photo IMG_1234.jpg --overlay found.jpg   # the marked photo
-panescape calibrate --restore                             # put your wallpaper back
+panescape calibrate --photo-pattern                         # show the pattern
+panescape calibrate --from-photo IMG_1.jpg IMG_2.jpg        # what would change
+panescape calibrate --from-photo IMG_1.jpg IMG_2.jpg --write          # save it to the layout
+panescape calibrate --from-photo IMG_1.jpg --overlay found.jpg       # the marked photo
+panescape calibrate --restore                               # put your wallpaper back
 ```
 
 Good to know:
 
-- **Your sizes must be right.** The photo measures where screens are, but not how
-  big they are: that comes from each monitor's model or lit area. The bezels
-  don't need to be exact, since what counts is the space between lit areas,
-  which goes into `gap`.
+- **Top bars, docks and icons** don't get in the way. The white panel stays well
+  inside each screen, and an edge that's partly covered is still measured from the
+  rest of it. The middle of each panel, where the dots are, must be clear.
+- **Your sizes must be right.** The photos measure where screens are, not how big
+  they are: that comes from each monitor's model or lit area. The bezels don't
+  need to be exact, since what counts is the space between lit areas, which goes
+  into `gap`.
 - **Flat or angled:** if every screen comes out within a degree of flat, only the
   gaps and heights are changed. Otherwise the angles and your eye position are
   added as well, which switches on [Angled and Tilted Screens](angled.md).
-- **On a flat desk,** one photo can't tell how far away your eyes were. That's fine:
-  a flat desk doesn't need to know.
-- **The main camera, not the wide one.** Wide-angle lenses bend straight lines
-  near the edges of the photo.
+- **On a flat desk,** the photos can't tell how far away your eyes were. That's
+  fine: a flat desk doesn't need to know.
+- **Prefer two photos to the wide-angle lens.** Wide-angle lenses bend straight
+  lines, which throws the measurements off; phones only partly correct for it.
 - **Check the result** with the test pattern by eye afterwards.
