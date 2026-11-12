@@ -11,6 +11,6 @@ monitors:
     resolution: 4K
     active_area: [596.7, 335.7] # from the spec sheet, landscape, mm
     bezel: {left: 6, right: 6, top: 6, bottom: 18}
-    gap: 3
+    gap: 3                      # mm of air between the frames; the bezels (8 and 6) are added on top
     v_align: bottom             # measure between the bottom edges...
     v_pos: 0                    # ...which are level

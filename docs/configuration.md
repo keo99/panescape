@@ -17,7 +17,7 @@ monitors:
     resolution: FHD             # or 1920x1080, 4K, QHD, …; always the panel's native mode
     size: 24in                  # diagonal; or active_area: [527.04, 296.46] (landscape, mm)
     bezel: 6                    # all sides; or [top, right, bottom, left]
-    gap: 0                      # mm from the previous housing (negative = overlap)
+    gap: 0                      # mm of air between the frames; bezels not included
     v_pos: -20                  # mm, + is up, relative to the first monitor
     v_align: center             # measure v_pos between centres | tops | bottoms
 
@@ -47,11 +47,17 @@ Every monitor key:
 | `rotation` / `orientation` | GNOME Settings name, or `vertical` / `horizontal` |
 | `bezel` | Number, `[t, r, b, l]`, or `{left, right, top, bottom, x, y}`, measured **as mounted** |
 | `right_of` / `left_of` / `below` / `above` | Place this monitor next to another one, by name (see [Layouts](layouts.md)) |
-| `gap` | Distance between this housing and the one it's placed next to (negative = overlap) |
+| `gap` | The air gap in mm between this monitor's frame and the one it's placed next to, as measured with a ruler. Bezels are **not** part of it (see below) |
 | `v_pos`, `v_align`, `v_ref` | Side-by-side monitors: vertical offset (+ is up), which edges it's measured between (`center`/`top`/`bottom`), and the reference monitor |
 | `h_pos`, `h_align`, `h_ref` | Stacked monitors: horizontal offset (+ is right), which edges it's measured between (`center`/`left`/`right`), and the reference monitor |
 | `position` | `[x, y]` of the housing's top-left in mm (y down), for arrangements the keys above can't describe |
 | `serial` / `connector` / `product` | Pin to a specific screen. Without these, screens are matched to the desktop by their arrangement |
+
+**Gaps and bezels add up.** The distance between two screens' lit areas is one
+screen's bezel, plus the `gap`, plus the other screen's bezel. So `gap: 2` means a
+real 2 mm space between the frames, and `gap: 0` means the frames touch. A
+negative gap is only for frames that actually overlap, with one in front of the
+other; it doesn't mean the bezels are thinner than they are.
 
 `defaults:` at the top level sets `gap`, `bezel`, `v_align` or `h_align` for every monitor.
 

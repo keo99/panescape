@@ -12,7 +12,7 @@ monitors:
   - name: centre
     model: Dell P2425H          # built-in specs: 1920x1080, active area 527.04 x 296.46 mm
     rotation: landscape
-    gap: 0                      # mm between this housing and the previous one (-ve = overlap)
+    gap: 0                      # mm of air between the frames (0 = touching); bezels are added on top
     v_pos: -20                  # centre is 20 mm BELOW the left monitor's centre (+ve = up)
 
   - name: right

@@ -187,9 +187,11 @@ class MonitorForm(QWidget):
         row.addWidget(self.target, 1)
         f.addRow("Placed", row)
         self.gap = mm_spin(-200, 2000)
-        self.gap.setToolTip("Space between the two housings (negative if they overlap)")
+        self.gap.setToolTip("The air gap between the two monitors' frames, as you'd measure it with a ruler.\n"
+                            "Bezels are not part of it: they're added on top. 0 = the frames touch;\n"
+                            "negative = one frame sits in front of the other.")
         self.gap.valueChanged.connect(lambda v: self._emit({"gap": number(v)}))
-        self.gap_label = QLabel("Gap")
+        self.gap_label = QLabel("Gap between frames")
         f.addRow(self.gap_label, self.gap)
         # side by side: vertical offset
         self.v_row = QWidget()

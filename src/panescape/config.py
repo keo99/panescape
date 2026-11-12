@@ -85,7 +85,7 @@ class Monitor:
     active_native: tuple[float, float]   # native landscape mm
     rotation: int = 0
     bezel: dict = field(default_factory=lambda: {s: 0.0 for s in SIDES})  # as mounted, mm
-    gap: float = 0.0                     # mm from previous monitor's housing; -ve = overlap
+    gap: float = 0.0                     # mm of air between the frames (bezels excluded); -ve = overlap
     v_pos: float = 0.0                   # mm, +ve = up, relative to v_ref
     v_align: str = "center"              # which edges v_pos is measured between
     v_ref: str | None = None             # monitor name (default: attached-to, else first monitor)

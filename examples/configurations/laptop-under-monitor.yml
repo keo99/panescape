@@ -11,6 +11,6 @@ monitors:
     size: 14in
     bezel: {left: 5, right: 5, top: 8, bottom: 15}
     below: monitor
-    gap: 110                    # stand + keyboard area between the housings
+    gap: 110                    # stand + keyboard area between the frames
     h_align: center             # measure between the centres...
     h_pos: -40                  # ...the laptop is 40 mm left of the monitor's centre

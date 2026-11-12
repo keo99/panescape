@@ -11,6 +11,9 @@ don't go round in a circle.
 | Above or below | `below: NAME` or `above: NAME`, plus `gap` (vertical) and `h_pos` / `h_align` (horizontal offset from NAME, or `h_ref`) |
 | Anything else | `position: [x, y]`, the housing's top-left in mm |
 
+`gap` is the air between the two frames, as measured with a ruler. Each
+monitor's bezels are added on top of it, so `gap: 0` means the frames touch.
+
 A 2×2 grid ([full example](https://github.com/keo99/panescape/blob/main/examples/configurations/grid-2x2.yml)):
 
 ```yaml

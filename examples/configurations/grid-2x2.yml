@@ -13,7 +13,7 @@ monitors:
     resolution: QHD
     size: 27in
     right_of: top-left
-    gap: 1                      # mm between the housings
+    gap: 1                      # mm of air between the frames; bezels are added on top
     v_align: top                # tops are level...
     v_pos: 0                    # ...exactly
 

@@ -40,6 +40,16 @@ def test_layout_positions():
     assert centre.active.x - centre.outer.x == pytest.approx(6)
 
 
+
+def test_gap_is_air_between_frames_and_bezels_add_on_top():
+    cfg = configuration_from_dict({"monitors": [
+        {"name": "a", "resolution": "FHD", "active_area": [500, 280], "bezel": 8},
+        {"name": "b", "resolution": "FHD", "active_area": [500, 280], "bezel": 6, "gap": 2},
+    ]})
+    a, b = compute_layout(cfg).placed
+    assert b.outer.x - a.outer.x1 == pytest.approx(2)        # the gap you measure with a ruler
+    assert b.active.x - a.active.x1 == pytest.approx(8 + 2 + 6)  # lit areas: bezel + gap + bezel
+
 def test_size_from_diagonal_and_legacy_form():
     cfg = configuration_from_dict({"monitors": {
         "layout": "LR", "edges": "joined",
